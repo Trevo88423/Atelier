@@ -28,10 +28,10 @@ export default function Settings() {
     </div>
   );
 
-  const RadioOption = ({ label, value, current, onChange }: {
-    label: string; value: string; current: string; onChange: (v: any) => void;
+  const RadioOption = ({ label, value, current, onSelect }: {
+    label: string; value: string; current: string; onSelect: (v: any) => void;
   }) => (
-    <label style={{
+    <label onClick={() => onSelect(value)} style={{
       display: 'flex',
       alignItems: 'center',
       gap: '10px',
@@ -64,9 +64,9 @@ export default function Settings() {
       </h1>
 
       <Section title="Appearance">
-        <RadioOption label="Dark" value="dark" current={theme} onChange={setTheme} />
-        <RadioOption label="Light" value="light" current={theme} onChange={setTheme} />
-        <RadioOption label="System" value="system" current={theme} onChange={setTheme} />
+        <RadioOption label="Dark" value="dark" current={theme} onSelect={setTheme} />
+        <RadioOption label="Light" value="light" current={theme} onSelect={setTheme} />
+        <RadioOption label="System" value="system" current={theme} onSelect={setTheme} />
         <div style={{ marginTop: '8px', fontSize: '12px', color: '#475569' }}>
           Theme switching will be fully implemented in a future release.
         </div>
