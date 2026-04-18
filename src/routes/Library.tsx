@@ -21,6 +21,14 @@ export default function Library() {
     return subscribe(() => setArtifacts(getArtifacts()));
   }, []);
 
+  // Reopen last artifact on launch (only if artifacts exist in store)
+  useEffect(() => {
+    const lastId = localStorage.getItem('atelier:lastViewed');
+    if (lastId && getArtifacts().some(a => a.id === lastId)) {
+      navigate(`/view/${lastId}`, { replace: true });
+    }
+  }, [navigate]);
+
   const handleOpen = useCallback((id: string) => {
     navigate(`/view/${id}`);
   }, [navigate]);

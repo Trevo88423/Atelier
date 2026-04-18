@@ -1,63 +1,65 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getArtifact, markOpened } from '../lib/artifact-store';
-import { transformArtifact } from '../runtime/transform';
-import { buildSandboxDoc } from '../runtime/sandbox';
-import { attachBridge, type BridgeStatus } from '../runtime/bridge';
+import { exportAsHtml, downloadHtml } from '../lib/export-html';
+import ViewerDispatch from '../viewers';
+import type { BridgeStatus } from '../runtime/bridge';
 
 export default function Viewer() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const cleanupRef = useRef<(() => void) | null>(null);
 
-  const [status, setStatus] = useState<BridgeStatus | 'transforming'>('transforming');
+  const [status, setStatus] = useState<BridgeStatus | 'transforming' | 'idle'>('idle');
   const [error, setError] = useState<string | null>(null);
-  const [sandboxDoc, setSandboxDoc] = useState<string | null>(null);
-  const [title, setTitle] = useState('');
 
-  // Load and transform artifact
+  const artifact = id ? getArtifact(id) : undefined;
+
   useEffect(() => {
-    if (!id) return;
-
-    const artifact = getArtifact(id);
-    if (!artifact) {
-      setError('Artifact not found');
-      setStatus('error');
-      return;
+    if (id) {
+      markOpened(id);
+      // Store last viewed for reopen-on-launch
+      localStorage.setItem('atelier:lastViewed', id);
     }
-
-    setTitle(artifact.title);
-    markOpened(id);
-
-    (async () => {
-      try {
-        setStatus('transforming');
-        const loader = artifact.kind === 'tsx' ? 'tsx' : 'jsx';
-        const transformed = await transformArtifact(artifact.source, loader);
-        const doc = await buildSandboxDoc(transformed);
-        setSandboxDoc(doc);
-        setStatus('loading');
-      } catch (err) {
-        setError(String(err));
-        setStatus('error');
-      }
-    })();
   }, [id]);
 
-  // Attach bridge when sandbox loads
-  useEffect(() => {
-    const iframe = iframeRef.current;
-    if (!iframe || !sandboxDoc || !id) return;
+  const handleStatusChange = useCallback((s: BridgeStatus | 'transforming') => {
+    setStatus(s);
+    if (s !== 'error') setError(null);
+  }, []);
 
-    cleanupRef.current?.();
-    const cleanup = attachBridge(iframe, id, {
-      onStatusChange: setStatus,
-      onError: setError,
-    });
-    cleanupRef.current = cleanup;
-    return cleanup;
-  }, [sandboxDoc, id]);
+  const handleError = useCallback((msg: string) => {
+    setError(msg);
+  }, []);
+
+  if (!artifact) {
+    return (
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '16px',
+        color: '#64748b',
+      }}>
+        <div style={{ fontSize: '16px' }}>Artifact not found</div>
+        <button
+          onClick={() => navigate('/')}
+          style={{
+            padding: '8px 20px',
+            borderRadius: '8px',
+            border: 'none',
+            background: '#3b82f6',
+            color: 'white',
+            fontSize: '14px',
+            cursor: 'pointer',
+          }}
+        >
+          Back to Library
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -85,7 +87,17 @@ export default function Viewer() {
           Back
         </button>
         <span style={{ fontSize: '14px', fontWeight: 600, color: '#e2e8f0' }}>
-          {title}
+          {artifact.title}
+        </span>
+        <span style={{
+          fontSize: '11px',
+          padding: '2px 6px',
+          borderRadius: '4px',
+          background: '#1e293b',
+          color: '#64748b',
+          textTransform: 'uppercase',
+        }}>
+          .{artifact.kind}
         </span>
         <span style={{ fontSize: '12px', color: '#64748b' }}>
           {status === 'transforming' && 'Compiling...'}
@@ -94,23 +106,41 @@ export default function Viewer() {
           {status === 'mounted' && 'Running'}
           {status === 'error' && 'Error'}
         </span>
+        <div style={{ flex: 1 }} />
+        <button
+          onClick={async () => {
+            if (!artifact) return;
+            try {
+              const html = await exportAsHtml(artifact);
+              const name = artifact.originalName.replace(/\.[^.]+$/, '') + '.html';
+              downloadHtml(html, name);
+            } catch (err) {
+              setError(String(err));
+            }
+          }}
+          style={{
+            padding: '4px 10px',
+            borderRadius: '6px',
+            border: '1px solid #334155',
+            background: 'transparent',
+            color: '#94a3b8',
+            fontSize: '13px',
+            cursor: 'pointer',
+          }}
+        >
+          Export HTML
+        </button>
       </div>
 
-      {/* Sandbox */}
+      {/* Viewer content */}
       <div style={{ flex: 1, position: 'relative' }}>
-        {status === 'transforming' && (
-          <div style={{
-            position: 'absolute',
-            inset: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#64748b',
-          }}>
-            Compiling artifact...
-          </div>
-        )}
+        <ViewerDispatch
+          artifact={artifact}
+          onStatusChange={handleStatusChange}
+          onError={handleError}
+        />
 
+        {/* Error overlay */}
         {error && (
           <div style={{
             position: 'absolute',
@@ -131,21 +161,6 @@ export default function Viewer() {
           }}>
             {error}
           </div>
-        )}
-
-        {sandboxDoc && (
-          <iframe
-            ref={iframeRef}
-            sandbox="allow-scripts"
-            srcDoc={sandboxDoc}
-            style={{
-              width: '100%',
-              height: '100%',
-              border: 'none',
-              background: 'white',
-            }}
-            title="Artifact Sandbox"
-          />
         )}
       </div>
     </div>

@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import DropZone from './components/DropZone';
+import ErrorBoundary from './components/ErrorBoundary';
 import Library from './routes/Library';
 import Viewer from './routes/Viewer';
 import Settings from './routes/Settings';
@@ -29,7 +30,7 @@ function AppShell() {
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, height: '100%' }}>
           <Routes>
             <Route path="/" element={<Library />} />
-            <Route path="/view/:id" element={<Viewer />} />
+            <Route path="/view/:id" element={<ErrorBoundary><Viewer /></ErrorBoundary>} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </div>
