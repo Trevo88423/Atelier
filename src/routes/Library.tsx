@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ArtifactCard from '../components/ArtifactCard';
 import {
@@ -12,17 +12,24 @@ import {
 
 import demoSource from '../fixtures/demo.jsx?raw';
 
+const SUPPORTED_EXTENSIONS = ['jsx', 'tsx', 'html', 'svg', 'md', 'mermaid'];
+
 export default function Library() {
   const navigate = useNavigate();
   const [artifacts, setArtifacts] = useState<Artifact[]>(getArtifacts());
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState('');
 
   useEffect(() => {
     return subscribe(() => setArtifacts(getArtifacts()));
   }, []);
 
-  // Reopen last artifact on launch (only if artifacts exist in store)
+  // Reopen last artifact on initial app launch only
   useEffect(() => {
+    const alreadyLaunched = sessionStorage.getItem('atelier:launched');
+    if (alreadyLaunched) return;
+    sessionStorage.setItem('atelier:launched', '1');
+
     const lastId = localStorage.getItem('atelier:lastViewed');
     if (lastId && getArtifacts().some(a => a.id === lastId)) {
       navigate(`/view/${lastId}`, { replace: true });
@@ -31,6 +38,21 @@ export default function Library() {
 
   const handleOpen = useCallback((id: string) => {
     navigate(`/view/${id}`);
+  }, [navigate]);
+
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      if (typeof reader.result === 'string') {
+        const artifact = await importArtifact(reader.result, file.name);
+        navigate(`/view/${artifact.id}`);
+      }
+    };
+    reader.readAsText(file);
+    // Reset so the same file can be re-selected
+    e.target.value = '';
   }, [navigate]);
 
   const handleImportDemo = useCallback(async () => {
@@ -59,6 +81,28 @@ export default function Library() {
           Library
         </h1>
         <div style={{ flex: 1 }} />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={SUPPORTED_EXTENSIONS.map(e => `.${e}`).join(',')}
+          onChange={handleFileInput}
+          style={{ display: 'none' }}
+        />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          style={{
+            padding: '8px 16px',
+            borderRadius: '8px',
+            border: 'none',
+            background: '#3b82f6',
+            color: 'white',
+            fontSize: '13px',
+            fontWeight: 500,
+            cursor: 'pointer',
+          }}
+        >
+          + Import
+        </button>
         <input
           type="text"
           placeholder="Search artifacts..."
