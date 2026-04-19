@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getArtifact, markOpened } from '../lib/artifact-store';
 import { exportAsHtml, downloadHtml } from '../lib/export-html';
@@ -11,13 +11,14 @@ export default function Viewer() {
 
   const [status, setStatus] = useState<BridgeStatus | 'transforming' | 'idle'>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [killed, setKilled] = useState(false);
+  const viewerContainerRef = useRef<HTMLDivElement>(null);
 
   const artifact = id ? getArtifact(id) : undefined;
 
   useEffect(() => {
     if (id) {
       markOpened(id);
-      // Store last viewed for reopen-on-launch
       localStorage.setItem('atelier:lastViewed', id);
     }
   }, [id]);
@@ -30,6 +31,26 @@ export default function Viewer() {
   const handleError = useCallback((msg: string) => {
     setError(msg);
   }, []);
+
+  // Force-kill: blank all iframes to stop computation immediately
+  const handleStop = useCallback(() => {
+    const container = viewerContainerRef.current;
+    if (container) {
+      const iframes = container.querySelectorAll('iframe');
+      iframes.forEach(iframe => {
+        iframe.srcdoc = '';
+        iframe.src = 'about:blank';
+      });
+    }
+    setKilled(true);
+    setStatus('idle');
+    setError(null);
+  }, []);
+
+  const handleBack = useCallback(() => {
+    handleStop();
+    navigate('/');
+  }, [handleStop, navigate]);
 
   if (!artifact) {
     return (
@@ -73,7 +94,7 @@ export default function Viewer() {
         flexShrink: 0,
       }}>
         <button
-          onClick={() => navigate('/')}
+          onClick={handleBack}
           style={{
             padding: '4px 10px',
             borderRadius: '6px',
@@ -107,6 +128,22 @@ export default function Viewer() {
           {status === 'error' && 'Error'}
         </span>
         <div style={{ flex: 1 }} />
+        {!killed && (status === 'mounted' || status === 'loading' || status === 'ready' || status === 'transforming') && (
+          <button
+            onClick={handleStop}
+            style={{
+              padding: '4px 10px',
+              borderRadius: '6px',
+              border: '1px solid #7f1d1d',
+              background: 'transparent',
+              color: '#ef4444',
+              fontSize: '13px',
+              cursor: 'pointer',
+            }}
+          >
+            Stop
+          </button>
+        )}
         <button
           onClick={async () => {
             if (!artifact) return;
@@ -133,12 +170,41 @@ export default function Viewer() {
       </div>
 
       {/* Viewer content */}
-      <div style={{ flex: 1, position: 'relative' }}>
-        <ViewerDispatch
-          artifact={artifact}
-          onStatusChange={handleStatusChange}
-          onError={handleError}
-        />
+      <div ref={viewerContainerRef} style={{ flex: 1, position: 'relative' }}>
+        {killed ? (
+          <div style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px',
+            color: '#64748b',
+          }}>
+            <div style={{ fontSize: '15px' }}>Artifact stopped</div>
+            <button
+              onClick={() => setKilled(false)}
+              style={{
+                padding: '8px 20px',
+                borderRadius: '8px',
+                border: 'none',
+                background: '#3b82f6',
+                color: 'white',
+                fontSize: '14px',
+                cursor: 'pointer',
+              }}
+            >
+              Restart
+            </button>
+          </div>
+        ) : (
+          <ViewerDispatch
+            artifact={artifact}
+            onStatusChange={handleStatusChange}
+            onError={handleError}
+          />
+        )}
 
         {/* Error overlay */}
         {error && (

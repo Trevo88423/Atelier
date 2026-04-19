@@ -43,6 +43,21 @@
         "ext": ["tsx"],
         "mimeType": "text/tsx",
         "description": "React TSX Artifact"
+      },
+      {
+        "ext": ["html"],
+        "mimeType": "text/html",
+        "description": "HTML Artifact"
+      },
+      {
+        "ext": ["svg"],
+        "mimeType": "image/svg+xml",
+        "description": "SVG Artifact"
+      },
+      {
+        "ext": ["mermaid"],
+        "mimeType": "text/plain",
+        "description": "Mermaid Diagram"
       }
     ]
   },
