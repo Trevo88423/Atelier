@@ -1,17 +1,22 @@
 import { useState, useEffect } from 'react';
-
-type Theme = 'dark' | 'light' | 'system';
-
-function getStoredTheme(): Theme {
-  return (localStorage.getItem('atelier:theme') as Theme) || 'dark';
-}
+import { getArtifacts, subscribe } from '../lib/artifact-store';
 
 export default function Settings() {
-  const [theme, setTheme] = useState<Theme>(getStoredTheme);
+  const [artifacts, setArtifacts] = useState(getArtifacts());
 
-  useEffect(() => {
-    localStorage.setItem('atelier:theme', theme);
-  }, [theme]);
+  useEffect(() => subscribe(() => setArtifacts(getArtifacts())), []);
+
+  const totalSize = artifacts.reduce((sum, a) => sum + a.sizeBytes, 0);
+  const kindCounts = artifacts.reduce((acc, a) => {
+    acc[a.kind] = (acc[a.kind] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  function formatSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
 
   const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
     <div style={{
@@ -28,33 +33,16 @@ export default function Settings() {
     </div>
   );
 
-  const RadioOption = ({ label, value, current, onSelect }: {
-    label: string; value: string; current: string; onSelect: (v: any) => void;
-  }) => (
-    <label onClick={() => onSelect(value)} style={{
+  const StatRow = ({ label, value }: { label: string; value: string | number }) => (
+    <div style={{
       display: 'flex',
-      alignItems: 'center',
-      gap: '10px',
-      padding: '8px 0',
-      cursor: 'pointer',
+      justifyContent: 'space-between',
+      padding: '6px 0',
       fontSize: '14px',
-      color: value === current ? '#e2e8f0' : '#94a3b8',
     }}>
-      <div style={{
-        width: '18px',
-        height: '18px',
-        borderRadius: '50%',
-        border: `2px solid ${value === current ? '#3b82f6' : '#475569'}`,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}>
-        {value === current && (
-          <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#3b82f6' }} />
-        )}
-      </div>
-      {label}
-    </label>
+      <span style={{ color: '#94a3b8' }}>{label}</span>
+      <span style={{ color: '#e2e8f0', fontWeight: 500 }}>{value}</span>
+    </div>
   );
 
   return (
@@ -63,22 +51,13 @@ export default function Settings() {
         Settings
       </h1>
 
-      <Section title="Appearance">
-        <RadioOption label="Dark" value="dark" current={theme} onSelect={setTheme} />
-        <RadioOption label="Light" value="light" current={theme} onSelect={setTheme} />
-        <RadioOption label="System" value="system" current={theme} onSelect={setTheme} />
-        <div style={{ marginTop: '8px', fontSize: '12px', color: '#475569' }}>
-          Theme switching will be fully implemented in a future release.
-        </div>
-      </Section>
-
-      <Section title="Watched Folders">
-        <div style={{ color: '#94a3b8', fontSize: '14px' }}>
-          No watched folders configured.
-        </div>
-        <div style={{ marginTop: '8px', fontSize: '12px', color: '#475569' }}>
-          Watched folders will auto-import new artifacts. Coming soon.
-        </div>
+      <Section title="Library">
+        <StatRow label="Total artifacts" value={artifacts.length} />
+        <StatRow label="Total size" value={formatSize(totalSize)} />
+        <StatRow label="Pinned" value={artifacts.filter(a => a.pinned).length} />
+        {Object.entries(kindCounts).sort().map(([kind, count]) => (
+          <StatRow key={kind} label={`.${kind} files`} value={count} />
+        ))}
       </Section>
 
       <Section title="File Associations">
@@ -97,19 +76,52 @@ export default function Settings() {
           ))}
         </div>
         <div style={{ marginTop: '8px', fontSize: '12px', color: '#475569' }}>
-          File associations are registered at install time via Tauri.
+          File associations are registered when installing via the NSIS or MSI installer.
+        </div>
+      </Section>
+
+      <Section title="Keyboard Shortcuts">
+        <div style={{ fontSize: '13px', color: '#94a3b8', lineHeight: 2 }}>
+          <div><kbd style={kbdStyle}>Drag & Drop</kbd> Import artifact file</div>
+          <div><kbd style={kbdStyle}>+ Import</kbd> File picker in Library</div>
+          <div><kbd style={kbdStyle}>Stop</kbd> Kill runaway artifact</div>
         </div>
       </Section>
 
       <Section title="About">
         <div style={{ fontSize: '14px', color: '#94a3b8', lineHeight: 1.8 }}>
-          <div><strong style={{ color: '#e2e8f0' }}>Atelier</strong> v0.1.0-alpha</div>
+          <div><strong style={{ color: '#e2e8f0' }}>Atelier</strong> v0.1.0</div>
           <div>The player for what Claude builds.</div>
-          <div style={{ marginTop: '8px', fontSize: '12px', color: '#475569' }}>
-            Built with Tauri, React, and esbuild-wasm.
+          <div style={{ marginTop: '12px', fontSize: '13px' }}>
+            <div>Tauri 2 + React 19 + esbuild-wasm</div>
+            <div>SQLite for persistence, sandboxed iframe rendering</div>
+          </div>
+          <div style={{ marginTop: '12px' }}>
+            <a
+              href="https://github.com/Trevo88423/Atelier"
+              target="_blank"
+              rel="noopener"
+              style={{ color: '#3b82f6', textDecoration: 'none', fontSize: '13px' }}
+            >
+              GitHub Repository
+            </a>
           </div>
         </div>
       </Section>
     </div>
   );
 }
+
+const kbdStyle: React.CSSProperties = {
+  display: 'inline-block',
+  padding: '2px 8px',
+  borderRadius: '4px',
+  background: '#0f172a',
+  border: '1px solid #334155',
+  fontSize: '12px',
+  fontFamily: 'monospace',
+  color: '#e2e8f0',
+  marginRight: '8px',
+  minWidth: '80px',
+  textAlign: 'center',
+};

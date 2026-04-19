@@ -57,6 +57,24 @@ export default function ArtifactCard({ artifact, onOpen, onTogglePin, onDelete }
         (e.currentTarget as HTMLElement).style.transform = 'none';
       }}
     >
+      {/* Code preview */}
+      <div style={{
+        height: '60px',
+        marginBottom: '10px',
+        borderRadius: '6px',
+        background: '#0f172a',
+        padding: '6px 8px',
+        overflow: 'hidden',
+        fontSize: '9px',
+        fontFamily: 'monospace',
+        lineHeight: '1.3',
+        color: '#475569',
+        whiteSpace: 'pre',
+        borderLeft: `3px solid ${kindColor}`,
+      }}>
+        {artifact.source.slice(0, 300)}
+      </div>
+
       {/* Kind badge */}
       <div style={{
         display: 'inline-block',
@@ -109,6 +127,29 @@ export default function ArtifactCard({ artifact, onOpen, onTogglePin, onDelete }
         <span>{formatSize(artifact.sizeBytes)}</span>
         <span>{formatTime(artifact.lastOpenedAt ?? artifact.importedAt)}</span>
       </div>
+
+      {/* Tags */}
+      {artifact.tags.length > 0 && (
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '4px',
+          marginTop: '8px',
+        }}>
+          {artifact.tags.map(tag => (
+            <span key={tag} style={{
+              padding: '1px 6px',
+              borderRadius: '4px',
+              fontSize: '11px',
+              background: '#0f172a',
+              color: '#64748b',
+              border: '1px solid #1e293b',
+            }}>
+              {tag}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Actions */}
       <div

@@ -6,7 +6,7 @@
  */
 
 import { transformArtifact } from '../runtime/transform';
-import { loadVendorScripts } from '../runtime/sandbox';
+import { loadVendorScriptsForSource } from '../runtime/sandbox';
 import type { Artifact } from './artifact-store';
 
 export async function exportAsHtml(artifact: Artifact): Promise<string> {
@@ -15,7 +15,7 @@ export async function exportAsHtml(artifact: Artifact): Promise<string> {
     case 'tsx': {
       const loader = artifact.kind === 'tsx' ? 'tsx' : 'jsx';
       const transformed = await transformArtifact(artifact.source, loader);
-      const vendorHtml = await loadVendorScripts();
+      const vendorHtml = await loadVendorScriptsForSource(artifact.source);
 
       return `<!DOCTYPE html>
 <html>

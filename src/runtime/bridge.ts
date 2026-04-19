@@ -7,6 +7,7 @@
  */
 
 import { getDb } from '../lib/db';
+import { open as shellOpen } from '@tauri-apps/plugin-shell';
 
 export type BridgeStatus = 'loading' | 'ready' | 'mounted' | 'error';
 
@@ -148,9 +149,12 @@ export function attachBridge(
           break;
         }
         case 'shell.open': {
-          // In Tauri, this uses @tauri-apps/plugin-shell.
-          // In dev/browser, fall back to window.open.
-          window.open(msg.params.url, '_blank', 'noopener');
+          try {
+            await shellOpen(msg.params.url);
+          } catch {
+            // Fallback for browser dev mode
+            window.open(msg.params.url, '_blank', 'noopener');
+          }
           reply(null);
           break;
         }

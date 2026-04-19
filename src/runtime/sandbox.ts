@@ -11,52 +11,96 @@
  * - Transformed artifact code with mount logic
  */
 
-/** Vendor scripts loaded from disk, cached after first load */
-let vendorScriptsCache: string | null = null;
+/**
+ * Maps import specifiers to their vendor UMD filename.
+ * Core React files are always loaded; others are loaded on demand.
+ */
+const SPECIFIER_TO_FILE: Record<string, string> = {
+  'react':              'react.umd.js',
+  'react/jsx-runtime':  'react-jsx-runtime.umd.js',
+  'react-dom':          'react-dom.umd.js',
+  'react-dom/client':   'react-dom.umd.js',
+  'lucide-react':       'lucide-react.umd.js',
+  'recharts':           'recharts.umd.js',
+  'three':              'three.umd.js',
+  'mathjs':             'mathjs.umd.js',
+  'd3':                 'd3.umd.js',
+  'chart.js':           'chart-js.umd.js',
+  'chart.js/auto':      'chart-js.umd.js',
+  'plotly':             'plotly-js-dist-min.umd.js',
+  'plotly.js':          'plotly-js-dist-min.umd.js',
+  'plotly.js-dist-min': 'plotly-js-dist-min.umd.js',
+  'papaparse':          'papaparse.umd.js',
+  'lodash':             'lodash.umd.js',
+  'mammoth':            'mammoth.umd.js',
+  'xlsx':               'xlsx.umd.js',
+  'tone':               'tone.umd.js',
+  'tone/build/Tone':    'tone.umd.js',
+};
+
+/** Core files always loaded (order matters) */
+const CORE_FILES = [
+  'react.umd.js',
+  'react-jsx-runtime.umd.js',
+  'react-dom.umd.js',
+];
+
+/** Cache of loaded vendor file contents */
+const vendorFileCache = new Map<string, string>();
 
 /**
- * Load all vendor UMD scripts from the vendor/ directory.
- * In the Vite dev server, these are served from the project root.
- * In production (Tauri), they'll be read from the app's resource dir.
+ * Detect which vendor libraries an artifact source imports.
+ * Returns the deduplicated set of vendor filenames needed.
  */
-export async function loadVendorScripts(): Promise<string> {
-  if (vendorScriptsCache) return vendorScriptsCache;
+export function detectVendorImports(source: string): string[] {
+  const needed = new Set<string>(CORE_FILES);
 
-  const vendorFiles = [
-    // Core (order matters — React first)
-    'react.umd.js',
-    'react-jsx-runtime.umd.js',
-    'react-dom.umd.js',
-    'lucide-react.umd.js',
-    'recharts.umd.js',
-    // Additional libraries
-    'three.umd.js',
-    'mathjs.umd.js',
-    'd3.umd.js',
-    'chart-js.umd.js',
-    'papaparse.umd.js',
-    'lodash.umd.js',
-    'mammoth.umd.js',
-    'plotly-js-dist-min.umd.js',
-    'xlsx.umd.js',
-    'tone.umd.js',
-  ];
+  // Match import statements: import ... from 'specifier'
+  const importRegex = /import\s+[\s\S]*?\s+from\s+['"]([^'"]+)['"]/g;
+  let match;
+  while ((match = importRegex.exec(source)) !== null) {
+    const specifier = match[1];
+    const file = SPECIFIER_TO_FILE[specifier];
+    if (file) needed.add(file);
+  }
 
+  // Also check for require('specifier') patterns
+  const requireRegex = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+  while ((match = requireRegex.exec(source)) !== null) {
+    const specifier = match[1];
+    const file = SPECIFIER_TO_FILE[specifier];
+    if (file) needed.add(file);
+  }
+
+  return Array.from(needed);
+}
+
+/**
+ * Load specific vendor UMD scripts by filename.
+ * Results are cached individually so repeated loads are instant.
+ */
+async function loadVendorFiles(files: string[]): Promise<string> {
   const scripts: string[] = [];
-  for (const file of vendorFiles) {
-    try {
-      const resp = await fetch(`./vendor/${file}`);
-      if (resp.ok) {
-        const code = await resp.text();
-        scripts.push(`<script>/* ${file} */${code}</script>`);
+
+  for (const file of files) {
+    let code = vendorFileCache.get(file);
+    if (code === undefined) {
+      try {
+        const resp = await fetch(`./vendor/${file}`);
+        if (resp.ok) {
+          code = await resp.text();
+          vendorFileCache.set(file, code);
+        }
+      } catch {
+        console.warn(`[sandbox] Failed to load vendor/${file}`);
       }
-    } catch {
-      console.warn(`[sandbox] Failed to load vendor/${file}`);
+    }
+    if (code) {
+      scripts.push(`<script>/* ${file} */${code}</script>`);
     }
   }
 
-  vendorScriptsCache = scripts.join('\n');
-  return vendorScriptsCache;
+  return scripts.join('\n');
 }
 
 /**
@@ -117,13 +161,24 @@ const BOOT_SCRIPT = `
 `;
 
 /**
+ * Load vendor scripts needed for a given artifact source.
+ * Exported for use by export-html.
+ */
+export async function loadVendorScriptsForSource(source: string): Promise<string> {
+  const neededFiles = detectVendorImports(source);
+  return loadVendorFiles(neededFiles);
+}
+
+/**
  * Build the complete sandbox HTML document.
  *
  * @param transformedCode - Artifact code after JSX compile + import rewriting + mount wrapping
+ * @param artifactSource - Original source code, used to detect which vendor libs are needed
  * @returns Complete HTML string suitable for iframe srcdoc
  */
-export async function buildSandboxDoc(transformedCode: string): Promise<string> {
-  const vendorHtml = await loadVendorScripts();
+export async function buildSandboxDoc(transformedCode: string, artifactSource: string): Promise<string> {
+  const neededFiles = detectVendorImports(artifactSource);
+  const vendorHtml = await loadVendorFiles(neededFiles);
 
   return `<!DOCTYPE html>
 <html>

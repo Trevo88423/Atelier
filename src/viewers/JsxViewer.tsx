@@ -29,7 +29,7 @@ export default function JsxViewer({ source, artifactId, kind, onStatusChange, on
       try {
         const loader = kind === 'tsx' ? 'tsx' : 'jsx';
         const transformed = await transformArtifact(source, loader);
-        const doc = await buildSandboxDoc(transformed);
+        const doc = await buildSandboxDoc(transformed, source);
         if (!cancelled) {
           setSandboxDoc(doc);
           onStatusChange?.('loading');

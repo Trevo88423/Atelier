@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getArtifact, markOpened } from '../lib/artifact-store';
+import { getArtifact, markOpened, updateTags, subscribe } from '../lib/artifact-store';
 import { exportAsHtml, downloadHtml } from '../lib/export-html';
 import ViewerDispatch from '../viewers';
 import type { BridgeStatus } from '../runtime/bridge';
@@ -12,6 +12,9 @@ export default function Viewer() {
   const [status, setStatus] = useState<BridgeStatus | 'transforming' | 'idle'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [killed, setKilled] = useState(false);
+  const [tagInput, setTagInput] = useState('');
+  const [showTagInput, setShowTagInput] = useState(false);
+  const [, forceUpdate] = useState(0);
   const viewerContainerRef = useRef<HTMLDivElement>(null);
 
   const artifact = id ? getArtifact(id) : undefined;
@@ -22,6 +25,9 @@ export default function Viewer() {
       localStorage.setItem('atelier:lastViewed', id);
     }
   }, [id]);
+
+  // Re-render when artifact data changes (e.g., tags updated)
+  useEffect(() => subscribe(() => forceUpdate(n => n + 1)), []);
 
   const handleStatusChange = useCallback((s: BridgeStatus | 'transforming') => {
     setStatus(s);
@@ -120,6 +126,74 @@ export default function Viewer() {
         }}>
           .{artifact.kind}
         </span>
+        {/* Tags */}
+        {artifact.tags.map(tag => (
+          <span
+            key={tag}
+            onClick={() => updateTags(artifact.id, artifact.tags.filter(t => t !== tag))}
+            title="Click to remove"
+            style={{
+              padding: '2px 6px',
+              borderRadius: '4px',
+              fontSize: '11px',
+              background: '#1e293b',
+              color: '#94a3b8',
+              cursor: 'pointer',
+              border: '1px solid #334155',
+            }}
+          >
+            {tag} ×
+          </span>
+        ))}
+        {showTagInput ? (
+          <input
+            autoFocus
+            value={tagInput}
+            onChange={e => setTagInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && tagInput.trim()) {
+                const newTag = tagInput.trim().toLowerCase();
+                if (!artifact.tags.includes(newTag)) {
+                  updateTags(artifact.id, [...artifact.tags, newTag]);
+                }
+                setTagInput('');
+                setShowTagInput(false);
+              }
+              if (e.key === 'Escape') {
+                setTagInput('');
+                setShowTagInput(false);
+              }
+            }}
+            onBlur={() => { setTagInput(''); setShowTagInput(false); }}
+            placeholder="tag name"
+            style={{
+              padding: '2px 6px',
+              borderRadius: '4px',
+              border: '1px solid #3b82f6',
+              background: '#0f172a',
+              color: '#e2e8f0',
+              fontSize: '11px',
+              width: '80px',
+              outline: 'none',
+            }}
+          />
+        ) : (
+          <button
+            onClick={() => setShowTagInput(true)}
+            style={{
+              padding: '2px 6px',
+              borderRadius: '4px',
+              border: '1px dashed #334155',
+              background: 'transparent',
+              color: '#475569',
+              fontSize: '11px',
+              cursor: 'pointer',
+            }}
+          >
+            + tag
+          </button>
+        )}
+
         <span style={{ fontSize: '12px', color: '#64748b' }}>
           {status === 'transforming' && 'Compiling...'}
           {status === 'loading' && 'Loading...'}

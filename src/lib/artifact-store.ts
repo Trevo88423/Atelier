@@ -20,6 +20,7 @@ export interface Artifact {
   pinned: boolean;
   sizeBytes: number;
   tags: string[];
+  thumbnailDataUrl: string | null;
 }
 
 // ── In-memory fallback ──────────────────────────────────────────────
@@ -70,6 +71,7 @@ function rowToArtifact(row: ArtifactRow): Artifact {
     pinned: row.pinned === 1,
     sizeBytes: row.size_bytes,
     tags: row.tags ? JSON.parse(row.tags) : [],
+    thumbnailDataUrl: (row as any).thumbnail_path || null,
   };
 }
 
@@ -183,6 +185,7 @@ export async function importArtifact(
     pinned: false,
     sizeBytes: new TextEncoder().encode(source).length,
     tags: [],
+    thumbnailDataUrl: null,
   };
 
   // Persist
@@ -235,6 +238,40 @@ export function togglePin(id: string) {
       db.execute(
         'UPDATE artifacts SET pinned = $1 WHERE id = $2',
         [a.pinned ? 1 : 0, a.id]
+      );
+    }
+  });
+}
+
+export function updateThumbnail(id: string, dataUrl: string) {
+  const a = memArtifacts.find(a => a.id === id);
+  if (!a) return;
+
+  a.thumbnailDataUrl = dataUrl;
+  notify();
+
+  getDb().then(db => {
+    if (db) {
+      db.execute(
+        'UPDATE artifacts SET thumbnail_path = $1 WHERE id = $2',
+        [dataUrl, a.id]
+      );
+    }
+  });
+}
+
+export function updateTags(id: string, tags: string[]) {
+  const a = memArtifacts.find(a => a.id === id);
+  if (!a) return;
+
+  a.tags = tags;
+  notify();
+
+  getDb().then(db => {
+    if (db) {
+      db.execute(
+        'UPDATE artifacts SET tags = $1 WHERE id = $2',
+        [JSON.stringify(tags), a.id]
       );
     }
   });
