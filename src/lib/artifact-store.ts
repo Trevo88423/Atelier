@@ -243,6 +243,20 @@ export function togglePin(id: string) {
   });
 }
 
+export function updateTitle(id: string, title: string) {
+  const a = memArtifacts.find(a => a.id === id);
+  if (!a || !title.trim()) return;
+
+  a.title = title.trim();
+  notify();
+
+  getDb().then(db => {
+    if (db) {
+      db.execute('UPDATE artifacts SET title = $1 WHERE id = $2', [a.title, a.id]);
+    }
+  });
+}
+
 export function updateThumbnail(id: string, dataUrl: string) {
   const a = memArtifacts.find(a => a.id === id);
   if (!a) return;

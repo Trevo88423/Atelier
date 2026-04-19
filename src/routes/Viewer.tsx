@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getArtifact, markOpened, updateTags, subscribe } from '../lib/artifact-store';
+import { getArtifact, markOpened, updateTags, updateTitle, subscribe } from '../lib/artifact-store';
 import { exportAsHtml, downloadHtml } from '../lib/export-html';
 import ViewerDispatch from '../viewers';
 import type { BridgeStatus } from '../runtime/bridge';
@@ -14,6 +14,9 @@ export default function Viewer() {
   const [killed, setKilled] = useState(false);
   const [tagInput, setTagInput] = useState('');
   const [showTagInput, setShowTagInput] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
+  const [showSource, setShowSource] = useState(false);
   const [, forceUpdate] = useState(0);
   const viewerContainerRef = useRef<HTMLDivElement>(null);
 
@@ -113,9 +116,43 @@ export default function Viewer() {
         >
           Back
         </button>
-        <span style={{ fontSize: '14px', fontWeight: 600, color: '#e2e8f0' }}>
-          {artifact.title}
-        </span>
+        {editingTitle ? (
+          <input
+            autoFocus
+            value={titleDraft}
+            onChange={e => setTitleDraft(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                updateTitle(artifact.id, titleDraft);
+                setEditingTitle(false);
+              }
+              if (e.key === 'Escape') setEditingTitle(false);
+            }}
+            onBlur={() => {
+              if (titleDraft.trim()) updateTitle(artifact.id, titleDraft);
+              setEditingTitle(false);
+            }}
+            style={{
+              fontSize: '14px',
+              fontWeight: 600,
+              color: '#e2e8f0',
+              background: '#0f172a',
+              border: '1px solid #3b82f6',
+              borderRadius: '4px',
+              padding: '2px 6px',
+              outline: 'none',
+              width: '200px',
+            }}
+          />
+        ) : (
+          <span
+            onClick={() => { setTitleDraft(artifact.title); setEditingTitle(true); }}
+            title="Click to rename"
+            style={{ fontSize: '14px', fontWeight: 600, color: '#e2e8f0', cursor: 'pointer' }}
+          >
+            {artifact.title}
+          </span>
+        )}
         <span style={{
           fontSize: '11px',
           padding: '2px 6px',
@@ -202,7 +239,21 @@ export default function Viewer() {
           {status === 'error' && 'Error'}
         </span>
         <div style={{ flex: 1 }} />
-        {!killed && (status === 'mounted' || status === 'loading' || status === 'ready' || status === 'transforming') && (
+        <button
+          onClick={() => setShowSource(!showSource)}
+          style={{
+            padding: '4px 10px',
+            borderRadius: '6px',
+            border: '1px solid #334155',
+            background: showSource ? '#334155' : 'transparent',
+            color: '#94a3b8',
+            fontSize: '13px',
+            cursor: 'pointer',
+          }}
+        >
+          {showSource ? 'Preview' : 'Code'}
+        </button>
+        {!killed && !showSource && (status === 'mounted' || status === 'loading' || status === 'ready' || status === 'transforming') && (
           <button
             onClick={handleStop}
             style={{
@@ -245,7 +296,25 @@ export default function Viewer() {
 
       {/* Viewer content */}
       <div ref={viewerContainerRef} style={{ flex: 1, position: 'relative' }}>
-        {killed ? (
+        {showSource ? (
+          <pre style={{
+            width: '100%',
+            height: '100%',
+            margin: 0,
+            padding: '16px 20px',
+            background: '#0f172a',
+            color: '#cbd5e1',
+            fontSize: '13px',
+            fontFamily: "'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace",
+            lineHeight: '1.5',
+            overflow: 'auto',
+            tabSize: 2,
+            whiteSpace: 'pre',
+            boxSizing: 'border-box',
+          }}>
+            {artifact.source}
+          </pre>
+        ) : killed ? (
           <div style={{
             width: '100%',
             height: '100%',

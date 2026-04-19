@@ -7,6 +7,24 @@ interface ArtifactCardProps {
   onDelete: (id: string) => void;
 }
 
+/** Skip imports, comments, and blank lines to find interesting code */
+function getPreviewSnippet(source: string): string {
+  const lines = source.split('\n');
+  const start = lines.findIndex(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return false;
+    if (trimmed.startsWith('import ')) return false;
+    if (trimmed.startsWith('//')) return false;
+    if (trimmed.startsWith('/*')) return false;
+    if (trimmed.startsWith('*')) return false;
+    if (trimmed === '*/') return false;
+    if (trimmed.startsWith("'use ")) return false;
+    if (trimmed.startsWith('"use ')) return false;
+    return true;
+  });
+  return lines.slice(Math.max(start, 0)).join('\n').slice(0, 300);
+}
+
 const KIND_COLORS: Record<string, string> = {
   jsx: '#3b82f6',
   tsx: '#8b5cf6',
@@ -72,7 +90,7 @@ export default function ArtifactCard({ artifact, onOpen, onTogglePin, onDelete }
         whiteSpace: 'pre',
         borderLeft: `3px solid ${kindColor}`,
       }}>
-        {artifact.source.slice(0, 300)}
+        {getPreviewSnippet(artifact.source)}
       </div>
 
       {/* Kind badge */}

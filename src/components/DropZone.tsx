@@ -1,4 +1,6 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
+import { listen, TauriEvent } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
 
 interface DropZoneProps {
   onFileDrop: (source: string, filename: string) => void;
@@ -7,18 +9,49 @@ interface DropZoneProps {
 
 const SUPPORTED_EXTENSIONS = ['jsx', 'tsx', 'html', 'svg', 'md', 'mermaid'];
 
+function isArtifactFile(name: string): boolean {
+  const ext = name.split('.').pop()?.toLowerCase() || '';
+  return SUPPORTED_EXTENSIONS.includes(ext);
+}
+
 export default function DropZone({ onFileDrop, children }: DropZoneProps) {
   const [isDragOver, setIsDragOver] = useState(false);
 
+  // Tauri native drag-drop events (file paths from OS)
+  useEffect(() => {
+    const unlistenDrop = listen<{ paths: string[] }>(TauriEvent.DRAG_DROP, async (event) => {
+      setIsDragOver(false);
+      for (const filePath of event.payload.paths) {
+        const fileName = filePath.split(/[\\/]/).pop() || '';
+        if (!isArtifactFile(fileName)) continue;
+        try {
+          const source = await invoke<string>('read_file', { path: filePath });
+          onFileDrop(source, fileName);
+        } catch (err) {
+          console.warn('[dropzone] Failed to read dropped file:', err);
+        }
+        break; // Only handle first supported file
+      }
+    });
+
+    const unlistenOver = listen(TauriEvent.DRAG_OVER, () => setIsDragOver(true));
+    const unlistenLeave = listen(TauriEvent.DRAG_LEAVE, () => setIsDragOver(false));
+
+    return () => {
+      unlistenDrop.then(fn => fn());
+      unlistenOver.then(fn => fn());
+      unlistenLeave.then(fn => fn());
+    };
+  }, [onFileDrop]);
+
+  // Browser fallback (for dev mode)
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
 
     const file = e.dataTransfer.files[0];
     if (!file) return;
-
-    const ext = file.name.split('.').pop()?.toLowerCase();
-    if (!ext || !SUPPORTED_EXTENSIONS.includes(ext)) return;
+    if (!isArtifactFile(file.name)) return;
 
     const reader = new FileReader();
     reader.onload = () => {
