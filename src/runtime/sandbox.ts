@@ -23,11 +23,23 @@ export async function loadVendorScripts(): Promise<string> {
   if (vendorScriptsCache) return vendorScriptsCache;
 
   const vendorFiles = [
+    // Core (order matters — React first)
     'react.umd.js',
     'react-jsx-runtime.umd.js',
     'react-dom.umd.js',
     'lucide-react.umd.js',
     'recharts.umd.js',
+    // Additional libraries
+    'three.umd.js',
+    'mathjs.umd.js',
+    'd3.umd.js',
+    'chart-js.umd.js',
+    'papaparse.umd.js',
+    'lodash.umd.js',
+    'mammoth.umd.js',
+    'plotly-js-dist-min.umd.js',
+    'xlsx.umd.js',
+    'tone.umd.js',
   ];
 
   const scripts: string[] = [];

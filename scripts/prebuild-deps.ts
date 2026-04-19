@@ -9,7 +9,7 @@
  */
 
 import { build } from 'esbuild';
-import { mkdirSync, writeFileSync } from 'fs';
+import { mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -18,24 +18,36 @@ const ROOT = join(__dirname, '..');
 const VENDOR_SRC = join(ROOT, 'vendor-src', 'node_modules');
 const VENDOR_OUT = join(ROOT, 'public', 'vendor');
 
-// Maps package name → global variable name
-const GLOBALS: Record<string, string> = {
-  'react':        'React',
-  'react-dom':    'ReactDOM',
-  'lucide-react': 'lucideReact',
-  'recharts':     'Recharts',
+// Maps package name → { global, entry? (override), externals }
+interface VendorSpec {
+  global: string;
+  entry?: string;           // Override entry point (default: package name)
+  externals?: Record<string, string>;  // pkg → global
+}
+
+const VENDORS: Record<string, VendorSpec> = {
+  'react':              { global: 'React' },
+  'react-dom':          { global: 'ReactDOM', externals: { react: 'React' } },
+  'lucide-react':       { global: 'lucideReact', externals: { react: 'React' } },
+  'recharts':           { global: 'Recharts', externals: { react: 'React', 'react-dom': 'ReactDOM' } },
+  'three':              { global: 'THREE' },
+  'mathjs':             { global: 'mathjs', entry: 'mathjs/lib/browser/math.js' },
+  'd3':                 { global: 'd3' },
+  'chart.js':           { global: 'Chart', entry: 'chart.js/auto' },
+  'papaparse':          { global: 'Papa' },
+  'lodash':             { global: '_' },
+  'mammoth':            { global: 'mammoth', entry: 'mammoth/mammoth.browser.js' },
 };
 
 // Packages that should be treated as external (shared instance)
-const EXTERNALS: Record<string, Record<string, string>> = {
-  'react-dom': { 'react': 'React' },
-  'lucide-react': { 'react': 'React' },
-  'recharts': { 'react': 'React', 'react-dom': 'ReactDOM' },
-};
+const GLOBAL_MAP: Record<string, string> = Object.fromEntries(
+  Object.entries(VENDORS).map(([pkg, spec]) => [pkg, spec.global])
+);
 
-async function buildUmd(pkg: string, globalName: string): Promise<string> {
-  const externals = EXTERNALS[pkg] || {};
+async function buildUmd(pkg: string, spec: VendorSpec): Promise<string> {
+  const externals = spec.externals || {};
   const externalPkgs = Object.keys(externals);
+  const entryPoint = spec.entry || pkg;
 
   const plugins = externalPkgs.length > 0 ? [{
     name: 'global-externals',
@@ -47,8 +59,7 @@ async function buildUmd(pkg: string, globalName: string): Promise<string> {
         }));
         b.onLoad({ filter: /.*/, namespace: 'global-external' }, (args: any) => {
           const base = args.path.split('/')[0];
-          const globalVar = GLOBALS[base] || externals[base];
-          // For subpath imports like react/jsx-runtime, access via the base global
+          const globalVar = GLOBAL_MAP[base] || externals[base];
           return {
             contents: `module.exports = window.${globalVar};`,
             loader: 'js' as const,
@@ -59,10 +70,10 @@ async function buildUmd(pkg: string, globalName: string): Promise<string> {
   }] : [];
 
   const result = await build({
-    entryPoints: [join(VENDOR_SRC, pkg)],
+    entryPoints: [join(VENDOR_SRC, entryPoint)],
     bundle: true,
     format: 'iife',
-    globalName: `__vendor_${globalName}`,
+    globalName: `__vendor_${spec.global}`,
     platform: 'browser',
     target: 'es2020',
     minify: true,
@@ -74,10 +85,9 @@ async function buildUmd(pkg: string, globalName: string): Promise<string> {
   });
 
   const code = result.outputFiles[0].text;
-  return `(function(){${code};window.${globalName}=__vendor_${globalName};})();\n`;
+  return `(function(){${code};window.${spec.global}=__vendor_${spec.global};})();\n`;
 }
 
-// Also build a jsx-runtime shim that the esbuild JSX automatic transform needs
 function buildJsxRuntimeShim(): string {
   return `(function(){
   var React = window.React;
@@ -93,24 +103,60 @@ function buildJsxRuntimeShim(): string {
 })();\n`;
 }
 
+// Special handling for packages with pre-built browser UMD/min files
+async function copyPrebuilt(pkg: string, spec: VendorSpec, sourceFile: string): Promise<string> {
+  const code = readFileSync(join(VENDOR_SRC, sourceFile), 'utf-8');
+  return `(function(){${code}})();\n`;
+}
+
 // Main
 console.log('Building vendor UMD bundles...');
 mkdirSync(VENDOR_OUT, { recursive: true });
 
 // Build in dependency order (React first, then things that depend on it)
-const buildOrder = ['react', 'react-dom', 'lucide-react', 'recharts'];
+const buildOrder = [
+  'react', 'react-dom', 'lucide-react', 'recharts',
+  'three', 'mathjs', 'd3', 'chart.js',
+  'papaparse', 'lodash', 'mammoth',
+];
+
+// Packages that have pre-built UMD and are better copied than bundled
+const PREBUILT: Record<string, string> = {
+  'plotly.js-dist-min': 'plotly.js-dist-min/plotly.min.js',
+  'xlsx': 'xlsx/dist/xlsx.mini.min.js',
+  'tone': 'tone/build/Tone.js',
+};
 
 async function main() {
   for (const pkg of buildOrder) {
-    const globalName = GLOBALS[pkg];
-    console.log(`  ${pkg} → window.${globalName}`);
+    const spec = VENDORS[pkg];
+    console.log(`  ${pkg} → window.${spec.global}`);
     try {
-      const code = await buildUmd(pkg, globalName);
-      const filename = pkg.replace(/\//g, '-') + '.umd.js';
+      const code = await buildUmd(pkg, spec);
+      const filename = pkg.replace(/[/.]/g, '-') + '.umd.js';
       writeFileSync(join(VENDOR_OUT, filename), code);
       console.log(`    ✓ ${filename} (${(code.length / 1024).toFixed(1)}KB)`);
     } catch (err) {
       console.error(`    ✗ Failed to build ${pkg}:`, err);
+      process.exit(1);
+    }
+  }
+
+  // Copy pre-built bundles
+  for (const [pkg, sourceFile] of Object.entries(PREBUILT)) {
+    const spec: VendorSpec = pkg === 'plotly.js-dist-min'
+      ? { global: 'Plotly' }
+      : pkg === 'xlsx'
+        ? { global: 'XLSX' }
+        : { global: 'Tone' };
+    console.log(`  ${pkg} → window.${spec.global} (prebuilt)`);
+    try {
+      const code = await copyPrebuilt(pkg, spec, sourceFile);
+      const filename = pkg.replace(/[/.]/g, '-') + '.umd.js';
+      writeFileSync(join(VENDOR_OUT, filename), code);
+      console.log(`    ✓ ${filename} (${(code.length / 1024).toFixed(1)}KB)`);
+    } catch (err) {
+      console.error(`    ✗ Failed to copy ${pkg}:`, err);
       process.exit(1);
     }
   }
@@ -121,7 +167,7 @@ async function main() {
   console.log(`  jsx-runtime shim → window._jsx_runtime`);
   console.log(`    ✓ react-jsx-runtime.umd.js (${(jsxShim.length / 1024).toFixed(1)}KB)`);
 
-  console.log('\nDone. Vendor bundles written to vendor/');
+  console.log('\nDone. Vendor bundles written to public/vendor/');
 }
 
 main();
