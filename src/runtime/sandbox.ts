@@ -170,20 +170,65 @@ export async function loadVendorScriptsForSource(source: string): Promise<string
 }
 
 /**
+ * Builds the Content-Security-Policy meta tag content for a sandboxed artifact.
+ *
+ * Default is strict: `connect-src 'none'` blocks all fetch/XHR/WebSocket/EventSource.
+ * Images, fonts, media stay permissive so presentation-only artifacts still look right.
+ * Only `connect-src` expands based on granted network origins.
+ *
+ * Note: CSP `connect-src` supports scheme + host (+ port). Paths are ignored by spec.
+ * Wildcard subdomains (`https://*.example.com`) are supported.
+ */
+function buildCSP(grantedNetworkOrigins: string[]): string {
+  const connectSrc = grantedNetworkOrigins.length > 0
+    ? grantedNetworkOrigins.join(' ')
+    : "'none'";
+
+  return [
+    `default-src 'self' 'unsafe-inline'`,
+    // Inline + eval required for transformed artifact code and Tailwind JIT.
+    `script-src 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com`,
+    `style-src 'unsafe-inline' https://cdn.tailwindcss.com https://fonts.googleapis.com`,
+    `img-src * data: blob:`,
+    `media-src * data: blob:`,
+    `font-src * data: https://fonts.gstatic.com`,
+    `connect-src ${connectSrc}`,
+    // Lock down things artifacts shouldn't need.
+    `frame-src 'none'`,
+    `worker-src 'self' blob:`,
+    `object-src 'none'`,
+    `base-uri 'none'`,
+    `form-action 'none'`,
+  ].join('; ');
+}
+
+export interface BuildSandboxOptions {
+  /** Artifact code after JSX compile + import rewriting + mount wrapping. */
+  transformedCode: string;
+  /** Original source code, used to detect which vendor libs are needed. */
+  artifactSource: string;
+  /** Network origins from the manifest that the user has granted. Default: none. */
+  grantedNetworkOrigins?: string[];
+}
+
+/**
  * Build the complete sandbox HTML document.
  *
- * @param transformedCode - Artifact code after JSX compile + import rewriting + mount wrapping
- * @param artifactSource - Original source code, used to detect which vendor libs are needed
- * @returns Complete HTML string suitable for iframe srcdoc
+ * Returns a Content-Security-Policy-hardened HTML string suitable for iframe srcdoc.
+ * Network capability is enforced via `connect-src` in the CSP meta tag; iframe-level
+ * capabilities (geolocation, camera, etc.) are gated by the parent via the `allow` attr.
  */
-export async function buildSandboxDoc(transformedCode: string, artifactSource: string): Promise<string> {
+export async function buildSandboxDoc(opts: BuildSandboxOptions): Promise<string> {
+  const { transformedCode, artifactSource, grantedNetworkOrigins = [] } = opts;
   const neededFiles = detectVendorImports(artifactSource);
   const vendorHtml = await loadVendorFiles(neededFiles);
+  const csp = buildCSP(grantedNetworkOrigins);
 
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="${csp}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://cdn.tailwindcss.com"><\/script>
 <style>

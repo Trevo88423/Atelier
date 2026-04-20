@@ -1,9 +1,12 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getArtifact, markOpened, updateTags, updateTitle, subscribe } from '../lib/artifact-store';
 import { exportAsHtml, downloadHtml } from '../lib/export-html';
 import ViewerDispatch from '../viewers';
 import type { BridgeStatus } from '../runtime/bridge';
+import { parseManifest, capabilityId, type Manifest, type Capability } from '../runtime/manifest';
+import { getGranted, grantAll } from '../lib/permissions';
+import PermissionDialog from '../components/PermissionDialog';
 
 export default function Viewer() {
   const { id } = useParams<{ id: string }>();
@@ -20,17 +23,77 @@ export default function Viewer() {
   const [, forceUpdate] = useState(0);
   const viewerContainerRef = useRef<HTMLDivElement>(null);
 
+  // Capability model: manifest + grants + consent flow.
+  const [grantedCaps, setGrantedCaps] = useState<Set<string>>(new Set());
+  const [grantsLoaded, setGrantsLoaded] = useState(false);
+  const [consentBlocked, setConsentBlocked] = useState(false);
+
   const artifact = id ? getArtifact(id) : undefined;
+
+  // Parse manifest from source. Only JSX/TSX artifacts carry manifests.
+  const { manifest, parseErr } = useMemo(() => {
+    if (!artifact || (artifact.kind !== 'jsx' && artifact.kind !== 'tsx')) {
+      return { manifest: null as Manifest | null, parseErr: null as string | null };
+    }
+    try {
+      return { manifest: parseManifest(artifact.source), parseErr: null };
+    } catch (err) {
+      return { manifest: null, parseErr: String(err instanceof Error ? err.message : err) };
+    }
+  }, [artifact]);
+
+  // Pending capabilities = declared but not yet granted (and user hasn't blocked this session).
+  const pendingCaps = useMemo<Capability[]>(() => {
+    if (!manifest || !grantsLoaded || consentBlocked) return [];
+    return manifest.requires.filter(cap => !grantedCaps.has(capabilityId(cap)));
+  }, [manifest, grantedCaps, grantsLoaded, consentBlocked]);
+
+  const showConsentDialog = pendingCaps.length > 0;
 
   useEffect(() => {
     if (id) {
       markOpened(id);
-      localStorage.setItem('atelier:lastViewed', id);
+      localStorage.setItem('stele:lastViewed', id);
     }
   }, [id]);
 
   // Re-render when artifact data changes (e.g., tags updated)
   useEffect(() => subscribe(() => forceUpdate(n => n + 1)), []);
+
+  // Surface manifest parse error to the viewer error banner.
+  useEffect(() => {
+    if (parseErr) setError(`Manifest error: ${parseErr}`);
+  }, [parseErr]);
+
+  // Load existing grants for this artifact whenever the artifact id changes.
+  useEffect(() => {
+    if (!artifact) return;
+    let cancelled = false;
+    setGrantsLoaded(false);
+    setConsentBlocked(false);
+    getGranted(artifact.id).then(grants => {
+      if (!cancelled) {
+        setGrantedCaps(grants);
+        setGrantsLoaded(true);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [artifact?.id]);
+
+  const handleAllowCaps = useCallback(async () => {
+    if (!artifact || !manifest) return;
+    const capIds = manifest.requires.map(capabilityId);
+    await grantAll(artifact.id, capIds);
+    setGrantedCaps(prev => {
+      const next = new Set(prev);
+      capIds.forEach(c => next.add(c));
+      return next;
+    });
+  }, [artifact, manifest]);
+
+  const handleBlockCaps = useCallback(() => {
+    setConsentBlocked(true);
+  }, []);
 
   const handleStatusChange = useCallback((s: BridgeStatus | 'transforming') => {
     setStatus(s);
@@ -341,12 +404,39 @@ export default function Viewer() {
               Restart
             </button>
           </div>
-        ) : (
+        ) : showConsentDialog && manifest ? (
+          <div style={{
+            width: '100%',
+            height: '100%',
+            background: '#0f172a',
+            position: 'relative',
+          }}>
+            <PermissionDialog
+              manifest={manifest}
+              pending={pendingCaps}
+              onAllow={handleAllowCaps}
+              onBlock={handleBlockCaps}
+            />
+          </div>
+        ) : grantsLoaded ? (
           <ViewerDispatch
             artifact={artifact}
+            manifest={manifest}
+            grantedCapabilities={grantedCaps}
             onStatusChange={handleStatusChange}
             onError={handleError}
           />
+        ) : (
+          <div style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#64748b',
+          }}>
+            Loading...
+          </div>
         )}
 
         {/* Error overlay */}

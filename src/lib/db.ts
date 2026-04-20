@@ -16,7 +16,7 @@ export async function getDb(): Promise<Database | null> {
 
   initPromise = (async () => {
     try {
-      db = await Database.load('sqlite:atelier.db');
+      db = await Database.load('sqlite:stele.db');
       return db;
     } catch (e) {
       console.warn('[db] SQLite not available, using in-memory fallback:', e);

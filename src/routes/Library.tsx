@@ -26,11 +26,11 @@ export default function Library() {
 
   // Reopen last artifact on initial app launch only
   useEffect(() => {
-    const alreadyLaunched = sessionStorage.getItem('atelier:launched');
+    const alreadyLaunched = sessionStorage.getItem('stele:launched');
     if (alreadyLaunched) return;
-    sessionStorage.setItem('atelier:launched', '1');
+    sessionStorage.setItem('stele:launched', '1');
 
-    const lastId = localStorage.getItem('atelier:lastViewed');
+    const lastId = localStorage.getItem('stele:lastViewed');
     if (lastId && getArtifacts().some(a => a.id === lastId)) {
       navigate(`/view/${lastId}`, { replace: true });
     }

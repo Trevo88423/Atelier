@@ -40,7 +40,7 @@ export default function Sidebar() {
         color: '#e2e8f0',
         letterSpacing: '-0.02em',
       }}>
-        Atelier
+        Stele
       </div>
 
       <button
@@ -99,7 +99,7 @@ export default function Sidebar() {
         color: '#475569',
         textAlign: 'center',
       }}>
-        v0.1.0-alpha
+        v0.2.0
       </div>
     </aside>
   );

@@ -8,13 +8,48 @@ import {
   toggleWatchedFolder,
   subscribeWatcher,
 } from '../lib/watcher';
+import {
+  getAllGrants,
+  revoke as revokePermission,
+  subscribePermissions,
+  type GrantedPermission,
+} from '../lib/permissions';
 
 export default function Settings() {
   const [artifacts, setArtifacts] = useState(getArtifacts());
   const [watchedFolders, setWatchedFolders] = useState(getWatchedFolders());
+  const [grants, setGrants] = useState<GrantedPermission[]>([]);
 
   useEffect(() => subscribe(() => setArtifacts(getArtifacts())), []);
   useEffect(() => subscribeWatcher(() => setWatchedFolders(getWatchedFolders())), []);
+
+  useEffect(() => {
+    getAllGrants().then(setGrants);
+    return subscribePermissions(() => { getAllGrants().then(setGrants); });
+  }, []);
+
+  // Group grants by artifact for display
+  const grantsByArtifact = grants.reduce((acc, g) => {
+    if (!acc[g.artifactId]) acc[g.artifactId] = [];
+    acc[g.artifactId].push(g);
+    return acc;
+  }, {} as Record<string, GrantedPermission[]>);
+
+  function artifactTitle(id: string): string {
+    return artifacts.find(a => a.id === id)?.title ?? id.slice(0, 12) + '…';
+  }
+
+  function capLabel(cap: string): string {
+    if (cap.startsWith('network:')) return `Network → ${cap.slice('network:'.length)}`;
+    switch (cap) {
+      case 'geolocation':     return 'Location';
+      case 'camera':          return 'Camera';
+      case 'microphone':      return 'Microphone';
+      case 'clipboard-read':  return 'Clipboard (read)';
+      case 'clipboard-write': return 'Clipboard (write)';
+      default:                return cap;
+    }
+  }
 
   const totalSize = artifacts.reduce((sum, a) => sum + a.sizeBytes, 0);
   const kindCounts = artifacts.reduce((acc, a) => {
@@ -182,6 +217,60 @@ export default function Settings() {
         </div>
       </Section>
 
+      <Section title="Permissions">
+        {Object.keys(grantsByArtifact).length === 0 ? (
+          <div style={{ color: '#475569', fontSize: '13px' }}>
+            No permissions granted. Permissions appear here when an artifact with a manifest is allowed.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {Object.entries(grantsByArtifact).map(([artifactId, caps]) => (
+              <div key={artifactId} style={{
+                padding: '12px',
+                borderRadius: '8px',
+                background: '#0f172a',
+                border: '1px solid #334155',
+              }}>
+                <div style={{ fontSize: '13px', fontWeight: 500, color: '#e2e8f0', marginBottom: '8px' }}>
+                  {artifactTitle(artifactId)}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {caps.map(c => (
+                    <div key={c.capability} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '8px',
+                      fontSize: '12px',
+                      color: '#94a3b8',
+                    }}>
+                      <span>{capLabel(c.capability)}</span>
+                      <button
+                        onClick={() => revokePermission(artifactId, c.capability)}
+                        style={{
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          border: '1px solid #334155',
+                          background: 'transparent',
+                          color: '#ef4444',
+                          fontSize: '11px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Revoke
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ marginTop: '10px', fontSize: '12px', color: '#475569' }}>
+          Artifacts declare the capabilities they need via an <code>@stele-manifest</code> block.
+        </div>
+      </Section>
+
       <Section title="File Associations">
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
           {['jsx', 'tsx', 'html', 'svg', 'md', 'mermaid'].map(ext => (
@@ -204,15 +293,15 @@ export default function Settings() {
 
       <Section title="About">
         <div style={{ fontSize: '14px', color: '#94a3b8', lineHeight: 1.8 }}>
-          <div><strong style={{ color: '#e2e8f0' }}>Atelier</strong> v0.1.0</div>
-          <div>The player for what Claude builds.</div>
+          <div><strong style={{ color: '#e2e8f0' }}>Stele</strong> v0.2.0</div>
+          <div>VLC for JSX — the desktop runtime for interactive artifacts.</div>
           <div style={{ marginTop: '12px', fontSize: '13px' }}>
             <div>Tauri 2 + React 19 + esbuild-wasm</div>
             <div>SQLite for persistence, sandboxed iframe rendering</div>
           </div>
           <div style={{ marginTop: '12px' }}>
             <a
-              href="https://github.com/Trevo88423/Atelier"
+              href="https://github.com/stele-app/stele"
               target="_blank"
               rel="noopener"
               style={{ color: '#3b82f6', textDecoration: 'none', fontSize: '13px' }}

@@ -4,6 +4,7 @@
 
 import type { Artifact } from '../lib/artifact-store';
 import type { BridgeStatus } from '../runtime/bridge';
+import type { Manifest } from '../runtime/manifest';
 import JsxViewer from './JsxViewer';
 import HtmlViewer from './HtmlViewer';
 import SvgViewer from './SvgViewer';
@@ -12,11 +13,19 @@ import MermaidViewer from './MermaidViewer';
 
 interface ViewerDispatchProps {
   artifact: Artifact;
+  manifest: Manifest | null;
+  grantedCapabilities: Set<string>;
   onStatusChange?: (status: BridgeStatus | 'transforming') => void;
   onError?: (message: string) => void;
 }
 
-export default function ViewerDispatch({ artifact, onStatusChange, onError }: ViewerDispatchProps) {
+export default function ViewerDispatch({
+  artifact,
+  manifest,
+  grantedCapabilities,
+  onStatusChange,
+  onError,
+}: ViewerDispatchProps) {
   switch (artifact.kind) {
     case 'jsx':
     case 'tsx':
@@ -25,6 +34,8 @@ export default function ViewerDispatch({ artifact, onStatusChange, onError }: Vi
           source={artifact.source}
           artifactId={artifact.id}
           kind={artifact.kind}
+          manifest={manifest}
+          grantedCapabilities={grantedCapabilities}
           onStatusChange={onStatusChange}
           onError={onError}
         />

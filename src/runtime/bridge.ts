@@ -9,6 +9,16 @@
 import { getDb } from '../lib/db';
 import { open as shellOpen } from '@tauri-apps/plugin-shell';
 
+/** Only http/https URLs are permitted for external navigation. */
+function isSafeExternalUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    return u.protocol === 'http:' || u.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 export type BridgeStatus = 'loading' | 'ready' | 'mounted' | 'error';
 
 export interface BridgeCallbacks {
@@ -149,11 +159,16 @@ export function attachBridge(
           break;
         }
         case 'shell.open': {
+          const url = String(msg.params?.url ?? '');
+          if (!isSafeExternalUrl(url)) {
+            reply(null, `Blocked: unsupported URL scheme for '${url}'`);
+            break;
+          }
           try {
-            await shellOpen(msg.params.url);
+            await shellOpen(url);
           } catch {
             // Fallback for browser dev mode
-            window.open(msg.params.url, '_blank', 'noopener');
+            window.open(url, '_blank', 'noopener');
           }
           reply(null);
           break;

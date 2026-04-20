@@ -23,12 +23,20 @@ fn file_arg_from_args(args: impl Iterator<Item = String>) -> Option<String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let migrations = vec![Migration {
-        version: 1,
-        description: "create initial tables",
-        sql: include_str!("../migrations/001_initial.sql"),
-        kind: MigrationKind::Up,
-    }];
+    let migrations = vec![
+        Migration {
+            version: 1,
+            description: "create initial tables",
+            sql: include_str!("../migrations/001_initial.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 2,
+            description: "add artifact_permissions table",
+            sql: include_str!("../migrations/002_permissions.sql"),
+            kind: MigrationKind::Up,
+        },
+    ];
 
     // Capture file path from initial CLI args
     let file_arg = file_arg_from_args(std::env::args());
@@ -36,7 +44,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(
             tauri_plugin_sql::Builder::default()
-                .add_migrations("sqlite:atelier.db", migrations)
+                .add_migrations("sqlite:stele.db", migrations)
                 .build(),
         )
         .plugin(tauri_plugin_shell::init())
@@ -64,5 +72,5 @@ pub fn run() {
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("error while running Atelier");
+        .expect("error while running Stele");
 }

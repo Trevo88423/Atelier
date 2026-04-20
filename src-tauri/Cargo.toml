@@ -1,14 +1,14 @@
 [package]
-name = "atelier"
-version = "0.1.0"
+name = "stele"
+version = "0.2.0"
 edition = "2021"
 
 [lib]
-name = "atelier_lib"
+name = "stele_lib"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [[bin]]
-name = "atelier"
+name = "stele"
 path = "src/main.rs"
 
 [dependencies]

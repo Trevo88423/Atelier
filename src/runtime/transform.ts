@@ -78,7 +78,7 @@ function rewriteImportsToGlobals(code: string): string {
 
       if (!globalName) {
         // Unknown import — comment it out with a warning so it doesn't break parsing
-        return `/* [atelier] unknown import: ${specifier} */`;
+        return `/* [stele] unknown import: ${specifier} */`;
       }
 
       const trimmed = imports.trim();
@@ -119,11 +119,11 @@ function wrapWithMount(code: string): string {
   // Replace `export default` with an assignment to a known variable.
   let wrapped = code.replace(
     /export\s+default\s+/g,
-    'var __atelier_default__ = '
+    'var __stele_default__ = '
   );
 
-  // Replace named exports: `export function Foo` → `function Foo; __atelier_exports__.Foo = Foo`
-  // and `export const Foo` → `const Foo; __atelier_exports__.Foo = Foo`
+  // Replace named exports: `export function Foo` → `function Foo; __stele_exports__.Foo = Foo`
+  // and `export const Foo` → `const Foo; __stele_exports__.Foo = Foo`
   const namedExports: string[] = [];
   wrapped = wrapped.replace(
     /export\s+(function|class|const|let|var)\s+(\w+)/g,
@@ -142,7 +142,7 @@ function wrapWithMount(code: string): string {
       for (const part of parts) {
         const asDefault = part.match(/^(\w+)\s+as\s+default$/);
         if (asDefault) {
-          assignments.push(`var __atelier_default__ = ${asDefault[1]};`);
+          assignments.push(`var __stele_default__ = ${asDefault[1]};`);
         } else {
           const asNamed = part.match(/^(\w+)(?:\s+as\s+(\w+))?$/);
           if (asNamed) {
@@ -157,16 +157,16 @@ function wrapWithMount(code: string): string {
 
   // Append mount logic
   const exportAssignments = namedExports.length > 0
-    ? namedExports.map(n => `__atelier_exports__.${n} = typeof ${n} !== 'undefined' ? ${n} : undefined;`).join('\n')
+    ? namedExports.map(n => `__stele_exports__.${n} = typeof ${n} !== 'undefined' ? ${n} : undefined;`).join('\n')
     : '';
 
   wrapped += `
 ;(function() {
-  var __atelier_exports__ = {};
+  var __stele_exports__ = {};
   ${exportAssignments}
-  var Component = (typeof __atelier_default__ !== 'undefined' ? __atelier_default__ : null)
-    || __atelier_exports__.App
-    || Object.values(__atelier_exports__).find(function(v) { return typeof v === 'function'; });
+  var Component = (typeof __stele_default__ !== 'undefined' ? __stele_default__ : null)
+    || __stele_exports__.App
+    || Object.values(__stele_exports__).find(function(v) { return typeof v === 'function'; });
   if (Component && window.React && window.ReactDOM) {
     try {
       var root = window.ReactDOM.createRoot(document.getElementById('root'));
