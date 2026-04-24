@@ -104,6 +104,10 @@ Note: file associations only register when installed via the platform installer 
 - **Backend:** Tauri 2, Rust, SQLite
 - **Sandbox:** esbuild-wasm for JSX/TSX transpilation, vendor UMD bundles, CSP-hardened iframe
 
+## Privacy
+
+Stele is local-first and collects no data. See [PRIVACY.md](PRIVACY.md).
+
 ## License
 
 Apache 2.0. See [LICENSE](LICENSE).
