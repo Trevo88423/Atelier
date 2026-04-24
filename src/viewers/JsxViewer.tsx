@@ -93,13 +93,18 @@ export default function JsxViewer({
     if (!iframe || !sandboxDoc) return;
 
     cleanupRef.current?.();
-    const cleanup = attachBridge(iframe, artifactId, {
-      onStatusChange: (s) => onStatusChange?.(s),
-      onError: (msg) => onError?.(msg),
-    });
+    const cleanup = attachBridge(
+      iframe,
+      artifactId,
+      {
+        onStatusChange: (s) => onStatusChange?.(s),
+        onError: (msg) => onError?.(msg),
+      },
+      { serverOrigin: manifest?.archetype === 'client-view' ? manifest.server ?? null : null },
+    );
     cleanupRef.current = cleanup;
     return cleanup;
-  }, [sandboxDoc, artifactId, onStatusChange, onError]);
+  }, [sandboxDoc, artifactId, onStatusChange, onError, manifest]);
 
   if (!sandboxDoc) {
     return (

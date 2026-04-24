@@ -14,6 +14,7 @@
 
 import { getDb } from '../lib/db';
 import { open as shellOpen } from '@tauri-apps/plugin-shell';
+import { getToken } from '../lib/tokens';
 
 /** Only http/https URLs are permitted for external navigation. */
 function isSafeExternalUrl(raw: string): boolean {
@@ -23,6 +24,70 @@ function isSafeExternalUrl(raw: string): boolean {
   } catch {
     return false;
   }
+}
+
+interface ServerFetchResult {
+  ok: boolean;
+  status: number;
+  statusText: string;
+  headers: Record<string, string>;
+  body: string;
+}
+
+/**
+ * Proxied fetch for Archetype B (client-view) artifacts. Path must be
+ * relative to the declared server origin — absolute or protocol-relative
+ * URLs are rejected so artifacts cannot pivot away from their server.
+ */
+async function serverFetch(
+  artifactId: string,
+  serverOrigin: string,
+  params: { path?: unknown; method?: unknown; headers?: unknown; body?: unknown },
+): Promise<ServerFetchResult> {
+  const path = typeof params.path === 'string' ? params.path : '';
+  if (!path.startsWith('/') || path.startsWith('//') || path.includes('://')) {
+    throw new Error(`server.fetch: path must start with '/' and stay within the server origin`);
+  }
+
+  let url: URL;
+  try {
+    url = new URL(path, serverOrigin);
+  } catch {
+    throw new Error(`server.fetch: invalid path '${path}'`);
+  }
+
+  const origin = new URL(serverOrigin).origin;
+  if (url.origin !== origin) {
+    throw new Error(`server.fetch: resolved URL '${url.href}' is outside the server origin '${origin}'`);
+  }
+
+  const method = typeof params.method === 'string' ? params.method.toUpperCase() : 'GET';
+  const headers: Record<string, string> = {};
+  if (params.headers && typeof params.headers === 'object') {
+    for (const [k, v] of Object.entries(params.headers as Record<string, unknown>)) {
+      if (typeof v === 'string') headers[k] = v;
+    }
+  }
+  const token = getToken(artifactId);
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const init: RequestInit = { method, headers };
+  if (params.body !== undefined && params.body !== null && method !== 'GET' && method !== 'HEAD') {
+    init.body = typeof params.body === 'string' ? params.body : JSON.stringify(params.body);
+  }
+
+  const resp = await fetch(url.href, init);
+  const text = await resp.text();
+  const respHeaders: Record<string, string> = {};
+  resp.headers.forEach((v, k) => { respHeaders[k] = v; });
+
+  return {
+    ok: resp.ok,
+    status: resp.status,
+    statusText: resp.statusText,
+    headers: respHeaders,
+    body: text,
+  };
 }
 
 export type BridgeStatus = 'loading' | 'ready' | 'mounted' | 'error';
@@ -107,10 +172,16 @@ async function storageList(artifactId: string, prefix: string, shared: boolean) 
   return entries;
 }
 
+export interface BridgeOptions {
+  /** Manifest.server for Archetype B artifacts. Enables `server.fetch` RPC. */
+  serverOrigin?: string | null;
+}
+
 export function attachBridge(
   iframe: HTMLIFrameElement,
   artifactId: string,
-  callbacks: BridgeCallbacks
+  callbacks: BridgeCallbacks,
+  options: BridgeOptions = {}
 ): () => void {
   let port: MessagePort | null = null;
 
@@ -157,6 +228,15 @@ export function attachBridge(
             window.open(url, '_blank', 'noopener');
           }
           reply(null);
+          break;
+        }
+        case 'server.fetch': {
+          if (!options.serverOrigin) {
+            reply(null, 'server.fetch is only available for client-view artifacts with a declared server');
+            break;
+          }
+          const result = await serverFetch(artifactId, options.serverOrigin, msg.params || {});
+          reply(result);
           break;
         }
         default:

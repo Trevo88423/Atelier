@@ -6,8 +6,10 @@ import ViewerDispatch from '../viewers';
 import type { BridgeStatus } from '../runtime/bridge';
 import { parseManifest, capabilityId, type Manifest, type Capability, type Archetype } from '../runtime/manifest';
 import { getGranted, grantAll } from '../lib/permissions';
+import { hasToken, setToken } from '../lib/tokens';
 import PermissionDialog from '../components/PermissionDialog';
 import AddManifestDialog from '../components/AddManifestDialog';
+import TokenDialog from '../components/TokenDialog';
 
 export default function Viewer() {
   const { id } = useParams<{ id: string }>();
@@ -29,6 +31,10 @@ export default function Viewer() {
   const [grantedCaps, setGrantedCaps] = useState<Set<string>>(new Set());
   const [grantsLoaded, setGrantsLoaded] = useState(false);
   const [consentBlocked, setConsentBlocked] = useState(false);
+
+  // Archetype B: token choice per artifact id. True once the user has either
+  // pasted a token or explicitly skipped. Resets when the artifact changes.
+  const [tokenChoiceMade, setTokenChoiceMade] = useState(false);
 
   const artifact = id ? getArtifact(id) : undefined;
 
@@ -75,6 +81,8 @@ export default function Viewer() {
     let cancelled = false;
     setGrantsLoaded(false);
     setConsentBlocked(false);
+    // Skip the token dialog if we already have one from this session.
+    setTokenChoiceMade(hasToken(artifact.id));
     getGranted(artifact.id).then(grants => {
       if (!cancelled) {
         setGrantedCaps(grants);
@@ -442,6 +450,23 @@ export default function Viewer() {
               pending={pendingCaps}
               onAllow={handleAllowCaps}
               onBlock={handleBlockCaps}
+            />
+          </div>
+        ) : manifest?.archetype === 'client-view' && !tokenChoiceMade && manifest.server ? (
+          <div style={{
+            width: '100%',
+            height: '100%',
+            background: '#0f172a',
+            position: 'relative',
+          }}>
+            <TokenDialog
+              artifactName={manifest.name}
+              serverHost={hostOf(manifest.server)}
+              onSubmit={(token) => {
+                setToken(artifact.id, token);
+                setTokenChoiceMade(true);
+              }}
+              onSkip={() => setTokenChoiceMade(true)}
             />
           </div>
         ) : grantsLoaded ? (

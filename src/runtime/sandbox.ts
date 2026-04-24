@@ -151,6 +151,23 @@ const BOOT_SCRIPT = `
     list:   function(prefix, shared) { return rpc('storage.list',   { prefix: prefix, shared: !!shared }); },
   };
 
+  // window.stele — platform namespace. Server proxy is defined for every
+  // artifact; the host rejects the call if the manifest didn't declare a
+  // server (i.e. archetype != 'client-view').
+  window.stele = {
+    server: {
+      fetch: function(path, options) {
+        var opts = options || {};
+        return rpc('server.fetch', {
+          path: path,
+          method: opts.method,
+          headers: opts.headers,
+          body: opts.body,
+        });
+      },
+    },
+  };
+
   // Intercept external links — open in OS default browser
   document.addEventListener('click', function(e) {
     var a = e.target.closest && e.target.closest('a[href]');
