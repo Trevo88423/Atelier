@@ -7,10 +7,8 @@
  */
 
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { transformArtifact } from '../runtime/transform';
-import { buildSandboxDoc } from '../runtime/sandbox';
+import { transformArtifact, buildSandboxDoc, capabilityId, capabilityAllowToken, type Manifest } from '@stele/runtime';
 import { attachBridge, type BridgeStatus } from '../runtime/bridge';
-import { capabilityId, capabilityAllowToken, type Manifest } from '../runtime/manifest';
 
 interface JsxViewerProps {
   source: string;

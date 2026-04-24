@@ -6,7 +6,7 @@
  * (artifact runs with no granted capabilities — presentation-only fallback).
  */
 
-import { CAPABILITY_LABELS, capabilityId, type Capability, type Manifest } from '../runtime/manifest';
+import { CAPABILITY_LABELS, capabilityId, type Capability, type Manifest } from '@stele/runtime';
 
 interface PermissionDialogProps {
   manifest: Manifest;

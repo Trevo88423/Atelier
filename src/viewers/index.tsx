@@ -4,7 +4,7 @@
 
 import type { Artifact } from '../lib/artifact-store';
 import type { BridgeStatus } from '../runtime/bridge';
-import type { Manifest } from '../runtime/manifest';
+import type { Manifest } from '@stele/runtime';
 import JsxViewer from './JsxViewer';
 import HtmlViewer from './HtmlViewer';
 import SvgViewer from './SvgViewer';

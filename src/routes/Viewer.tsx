@@ -4,7 +4,7 @@ import { getArtifact, markOpened, updateTags, updateTitle, updateSource, subscri
 import { exportAsHtml, downloadHtml } from '../lib/export-html';
 import ViewerDispatch from '../viewers';
 import type { BridgeStatus } from '../runtime/bridge';
-import { parseManifest, capabilityId, type Manifest, type Capability, type Archetype } from '../runtime/manifest';
+import { parseManifest, capabilityId, type Manifest, type Capability, type Archetype } from '@stele/runtime';
 import { getGranted, grantAll } from '../lib/permissions';
 import { hasToken, setToken } from '../lib/tokens';
 import PermissionDialog from '../components/PermissionDialog';

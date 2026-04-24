@@ -5,8 +5,7 @@
  * For HTML/SVG/Markdown/Mermaid: wraps in a minimal HTML shell.
  */
 
-import { transformArtifact } from '../runtime/transform';
-import { loadVendorScriptsForSource } from '../runtime/sandbox';
+import { transformArtifact, loadVendorScriptsForSource } from '@stele/runtime';
 import type { Artifact } from './artifact-store';
 
 export async function exportAsHtml(artifact: Artifact): Promise<string> {

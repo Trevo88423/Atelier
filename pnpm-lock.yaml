@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@stele/runtime':
+        specifier: workspace:*
+        version: link:packages/runtime
       '@tauri-apps/api':
         specifier: ^2.10.1
         version: 2.10.1
@@ -96,6 +99,12 @@ importers:
       vite:
         specifier: ^8.0.4
         version: 8.0.8(@types/node@24.12.2)(esbuild@0.28.0)(jiti@2.6.1)(tsx@4.21.0)
+
+  packages/runtime:
+    dependencies:
+      esbuild-wasm:
+        specifier: ^0.28.0
+        version: 0.28.0
 
 packages:
 
