@@ -12,6 +12,8 @@ Grab the installer for your platform from [Releases](../../releases):
 - **macOS:** `.dmg`
 - **Linux:** `.deb` or `.AppImage`
 
+Windows installers are Authenticode-signed. **Code signing provided free of charge by the [SignPath Foundation](https://signpath.org) under the [SignPath Foundation OSS signing program](https://signpath.io/foundation), using a certificate issued by [SignPath.io](https://signpath.io).**
+
 ## What it does
 
 - **Opens any supported artifact file natively.** Double-click in Explorer/Finder and it just runs.

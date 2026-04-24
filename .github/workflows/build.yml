@@ -95,6 +95,10 @@ jobs:
             **Windows:** `.msi` or `-setup.exe` (NSIS)
             **macOS:** `.dmg`
             **Linux:** `.deb` or `.AppImage`
+
+            ---
+
+            Windows installers are Authenticode-signed. Code signing provided free of charge by the [SignPath Foundation](https://signpath.org) under the [SignPath Foundation OSS signing program](https://signpath.io/foundation), using a certificate issued by [SignPath.io](https://signpath.io).
           releaseDraft: true
           prerelease: false
           args: --target ${{ matrix.target }}
