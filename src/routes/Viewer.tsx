@@ -33,6 +33,8 @@ export default function Viewer() {
   const artifact = id ? getArtifact(id) : undefined;
 
   // Parse manifest from source. Only JSX/TSX artifacts carry manifests.
+  // Key on source/kind rather than the artifact object so we recompute
+  // when the source is edited in place (e.g. by the Add-manifest dialog).
   const { manifest, parseErr } = useMemo(() => {
     if (!artifact || (artifact.kind !== 'jsx' && artifact.kind !== 'tsx')) {
       return { manifest: null as Manifest | null, parseErr: null as string | null };
@@ -42,7 +44,7 @@ export default function Viewer() {
     } catch (err) {
       return { manifest: null, parseErr: String(err instanceof Error ? err.message : err) };
     }
-  }, [artifact]);
+  }, [artifact?.source, artifact?.kind]);
 
   // Pending capabilities = declared but not yet granted (and user hasn't blocked this session).
   const pendingCaps = useMemo<Capability[]>(() => {
