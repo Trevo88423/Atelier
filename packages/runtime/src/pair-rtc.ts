@@ -97,6 +97,7 @@ interface SignalEnvelope {
 }
 
 type SignalPayload =
+  | { kind: 'hello' }
   | { kind: 'offer'; sdp: string }
   | { kind: 'answer'; sdp: string }
   | { kind: 'ice'; candidate: RTCIceCandidateInit };
@@ -221,29 +222,30 @@ export async function connectPair(opts: PairConnectOptions): Promise<PairConnect
     }
   };
 
-  if (isInitiator) {
-    setupChannel(pc.createDataChannel('stele-pair'));
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    await post({ kind: 'offer', sdp: offer.sdp ?? '' });
-  } else {
+  // Symmetric "hello" handshake: both peers post hello immediately. The
+  // initiator delays creating its offer until it has SEEN the responder's
+  // hello in the room. This is what makes pairing order-insensitive — if
+  // the initiator opens first and creates the offer immediately, Chrome's
+  // RTCPeerConnection sits in have-local-offer for a long time, and when
+  // the eventual answer arrives the ICE state has gone stale and the
+  // checks never complete. By gating offer creation on partner presence,
+  // pc + offer are always fresh when ICE checking begins.
+  if (!isInitiator) {
     pc.ondatachannel = (ev) => setupChannel(ev.channel);
     setStatus('waiting-for-partner');
   }
+  await post({ kind: 'hello' });
 
   // Poll the signaling server for partner messages.
   //
-  // Each session's pairing_id may collect stale offer/answer messages from
-  // previous sessions (KV TTL 5 min). To stay robust:
-  // - Among offers/answers we receive, only apply the LATEST one. Earlier ones
-  //   from prior sessions never become the active SDP.
-  // - We track the ts of the offer/answer we've already applied so we don't
-  //   reapply the same row on every poll cycle.
-  // - ICE candidates are applied additively — extra ones from stale sessions
-  //   are harmless (the new pc just ignores candidates it can't pair with).
+  // Among offers/answers we receive, only apply the LATEST one — earlier
+  // ones from prior sessions never become the active SDP. ICE candidates
+  // are applied additively; extras from stale sessions are harmless (the
+  // new pc just ignores candidates it can't pair with).
   let since = 0;
   let appliedOfferTs = 0;
   let appliedAnswerTs = 0;
+  let offerCreated = false; // initiator-side: have we created our offer yet?
 
   (async function pollLoop() {
     while (!cancelled) {
@@ -251,8 +253,21 @@ export async function connectPair(opts: PairConnectOptions): Promise<PairConnect
         const { messages, now } = await pollSignals(opts.signalingUrl, opts.pairingId, opts.partnerPublicKeyB64, since);
         since = now;
 
-        // Pick the latest offer / answer (if any) so we ignore stale ones
-        // sitting in KV from previous sessions.
+        // Look for partner presence (any message at all from them).
+        const partnerPresent = messages.length > 0;
+
+        // Initiator: create + post the offer once we've confirmed the
+        // partner is online. Doing this BEFORE seeing them lets Chrome's
+        // ICE state go stale before the answer arrives.
+        if (isInitiator && !offerCreated && partnerPresent) {
+          offerCreated = true;
+          setupChannel(pc.createDataChannel('stele-pair'));
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          await post({ kind: 'offer', sdp: offer.sdp ?? '' });
+        }
+
+        // Pick the latest offer / answer (ignore stale).
         let latestOffer: SignalEnvelope | null = null;
         let latestAnswer: SignalEnvelope | null = null;
         const iceMsgs: SignalEnvelope[] = [];
@@ -267,6 +282,7 @@ export async function connectPair(opts: PairConnectOptions): Promise<PairConnect
           } else if (p.kind === 'ice') {
             iceMsgs.push(env);
           }
+          // 'hello' messages are presence-only; nothing else to do here.
         }
 
         try {
