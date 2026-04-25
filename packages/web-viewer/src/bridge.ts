@@ -4,13 +4,15 @@
  * Mirrors the desktop bridge protocol (MessagePort RPC + window-channel
  * init/status) but swaps the platform-specific backends:
  *
- * - Storage   → in-memory Map (persistent IndexedDB is a follow-up).
+ * - Storage   → IndexedDB (persists across reloads; same artifact-scoped
+ *               isolation as the desktop SQLite store).
  * - shell.open → window.open.
- * - server.fetch (Archetype B) → same proxied fetch, host-side auth
- *                               injection. Web tokens will later be read
- *                               from URL fragments; for now the token is
- *                               passed in explicitly via BridgeOptions.
+ * - server.fetch (Archetype B) → host-side fetch with Authorization header
+ *               injection. Token comes in via BridgeOptions; the URL fragment
+ *               extraction lives in the Viewer route, not here.
  */
+
+import * as idb from './idb';
 
 export type BridgeStatus = 'loading' | 'ready' | 'mounted' | 'error';
 
@@ -26,34 +28,23 @@ export interface BridgeOptions {
   token?: string | null;
 }
 
-const storageByArtifact = new Map<string, Map<string, string>>();
-
 function storageScope(artifactId: string, shared: boolean): string {
   return shared ? '__shared__' : artifactId;
 }
 
-function getScope(scope: string): Map<string, string> {
-  let m = storageByArtifact.get(scope);
-  if (!m) { m = new Map(); storageByArtifact.set(scope, m); }
-  return m;
-}
-
-function storageGet(artifactId: string, key: string, shared: boolean) {
-  const m = getScope(storageScope(artifactId, shared));
-  const value = m.get(key);
+async function storageGet(artifactId: string, key: string, shared: boolean) {
+  const scope = storageScope(artifactId, shared);
+  const value = await idb.storageGet(artifactId, scope, key);
   return value !== undefined ? { key, value, shared } : null;
 }
 function storageSet(artifactId: string, key: string, value: string, shared: boolean) {
-  getScope(storageScope(artifactId, shared)).set(key, value);
+  return idb.storagePut(artifactId, storageScope(artifactId, shared), key, value);
 }
 function storageDelete(artifactId: string, key: string, shared: boolean) {
-  getScope(storageScope(artifactId, shared)).delete(key);
+  return idb.storageDelete(artifactId, storageScope(artifactId, shared), key);
 }
 function storageList(artifactId: string, prefix: string, shared: boolean) {
-  const m = getScope(storageScope(artifactId, shared));
-  const out: Array<{ key: string; value: string }> = [];
-  for (const [k, v] of m) if (k.startsWith(prefix)) out.push({ key: k, value: v });
-  return out;
+  return idb.storageList(artifactId, storageScope(artifactId, shared), prefix);
 }
 
 function isSafeExternalUrl(raw: string): boolean {
@@ -127,18 +118,18 @@ export function attachBridge(
     try {
       switch (msg.method) {
         case 'storage.get':
-          reply(storageGet(artifactId, msg.params.key, msg.params.shared));
+          reply(await storageGet(artifactId, msg.params.key, msg.params.shared));
           break;
         case 'storage.set':
-          storageSet(artifactId, msg.params.key, msg.params.value, msg.params.shared);
+          await storageSet(artifactId, msg.params.key, msg.params.value, msg.params.shared);
           reply(null);
           break;
         case 'storage.delete':
-          storageDelete(artifactId, msg.params.key, msg.params.shared);
+          await storageDelete(artifactId, msg.params.key, msg.params.shared);
           reply(null);
           break;
         case 'storage.list':
-          reply(storageList(artifactId, msg.params.prefix || '', msg.params.shared));
+          reply(await storageList(artifactId, msg.params.prefix || '', msg.params.shared));
           break;
         case 'shell.open': {
           const url = String(msg.params?.url ?? '');
