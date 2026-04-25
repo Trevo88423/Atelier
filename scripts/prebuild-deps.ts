@@ -16,7 +16,12 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const VENDOR_SRC = join(ROOT, 'vendor-src', 'node_modules');
-const VENDOR_OUT = join(ROOT, 'public', 'vendor');
+// Vendor UMDs are consumed by both desktop and web-viewer at runtime.
+// Write to every app's public/vendor/ so each Vite dev server can serve them.
+const VENDOR_OUTS = [
+  join(ROOT, 'public', 'vendor'),
+  join(ROOT, 'packages', 'web-viewer', 'public', 'vendor'),
+];
 
 // Maps package name → { global, entry? (override), externals }
 interface VendorSpec {
@@ -109,9 +114,15 @@ async function copyPrebuilt(pkg: string, spec: VendorSpec, sourceFile: string): 
   return `(function(){${code}})();\n`;
 }
 
+function writeVendorFile(filename: string, code: string) {
+  for (const out of VENDOR_OUTS) {
+    writeFileSync(join(out, filename), code);
+  }
+}
+
 // Main
 console.log('Building vendor UMD bundles...');
-mkdirSync(VENDOR_OUT, { recursive: true });
+for (const out of VENDOR_OUTS) mkdirSync(out, { recursive: true });
 
 // Build in dependency order (React first, then things that depend on it)
 const buildOrder = [
@@ -134,7 +145,7 @@ async function main() {
     try {
       const code = await buildUmd(pkg, spec);
       const filename = pkg.replace(/[/.]/g, '-') + '.umd.js';
-      writeFileSync(join(VENDOR_OUT, filename), code);
+      writeVendorFile(filename, code);
       console.log(`    ✓ ${filename} (${(code.length / 1024).toFixed(1)}KB)`);
     } catch (err) {
       console.error(`    ✗ Failed to build ${pkg}:`, err);
@@ -153,7 +164,7 @@ async function main() {
     try {
       const code = await copyPrebuilt(pkg, spec, sourceFile);
       const filename = pkg.replace(/[/.]/g, '-') + '.umd.js';
-      writeFileSync(join(VENDOR_OUT, filename), code);
+      writeVendorFile(filename, code);
       console.log(`    ✓ ${filename} (${(code.length / 1024).toFixed(1)}KB)`);
     } catch (err) {
       console.error(`    ✗ Failed to copy ${pkg}:`, err);
@@ -163,11 +174,11 @@ async function main() {
 
   // Write jsx-runtime shim
   const jsxShim = buildJsxRuntimeShim();
-  writeFileSync(join(VENDOR_OUT, 'react-jsx-runtime.umd.js'), jsxShim);
+  writeVendorFile('react-jsx-runtime.umd.js', jsxShim);
   console.log(`  jsx-runtime shim → window._jsx_runtime`);
   console.log(`    ✓ react-jsx-runtime.umd.js (${(jsxShim.length / 1024).toFixed(1)}KB)`);
 
-  console.log('\nDone. Vendor bundles written to public/vendor/');
+  console.log(`\nDone. Vendor bundles written to:\n  ${VENDOR_OUTS.map((p) => `- ${p}`).join('\n  ')}`);
 }
 
 main();
