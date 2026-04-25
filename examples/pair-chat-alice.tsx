@@ -4,9 +4,9 @@
  * version: 1.0.0
  * description: One half of a Tier 1 Strong paired chat. Open this file in one window and pair-chat-bob.tsx in another. They will discover each other via the Stele signaling server, establish a WebRTC data channel, and exchange end-to-end-encrypted messages — no central server sees the chat.
  * archetype: paired
- * pairing_id: stele-pair-chat-9695d62c48baa62b
- * partner_pubkey: MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE4W8T83D1C6hdZD2aniFqYMLBHblobChnnjXryzjMCD6Kfk1TI86jHcr+NSrkPpZxymDScGiihzKQSWq54llywA==
- * private_key: MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg1D/pdaAbe4pSTjOh3YyklIGJs87lsYu6Umi89tf1vMOhRANCAARCGwvWQQT8g831I4hjFWONLk63LqfVOtMSiamZcKSWle+JnWBt19xfbmHeEaoo2PCPVgemNeclwYhNYw7sskVp
+ * pairing_id: stele-pair-chat-8e0c1ff946eb261d
+ * partner_pubkey: MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEmvjEOYNqfUXwxxDZyGPQHnzTxLmOoqTdA8AM6Jq6gtkJuGs+qIPF204LPwu4nrBCUr4U6QIU6bZ/je0ilNZVDw==
+ * private_key: MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgsiZxQiJ26q+vnLd8SL48xOJqSWM58T0H2RKGQUN1EXShRANCAAQ2/HMXXxECTF8nvsWU8SZyvpDpt4n/FfFHTnp9Zb7T7t8p0g4+SmcygEH9/tBEujfZMD6wRgFvXqmq9l3JRlX9
  */
 
 import { useEffect, useRef, useState } from 'react';

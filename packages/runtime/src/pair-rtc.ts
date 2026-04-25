@@ -213,35 +213,65 @@ export async function connectPair(opts: PairConnectOptions): Promise<PairConnect
   }
 
   // Poll the signaling server for partner messages.
+  //
+  // Each session's pairing_id may collect stale offer/answer messages from
+  // previous sessions (KV TTL 5 min). To stay robust:
+  // - Among offers/answers we receive, only apply the LATEST one. Earlier ones
+  //   from prior sessions never become the active SDP.
+  // - We track the ts of the offer/answer we've already applied so we don't
+  //   reapply the same row on every poll cycle.
+  // - ICE candidates are applied additively — extra ones from stale sessions
+  //   are harmless (the new pc just ignores candidates it can't pair with).
   let since = 0;
-  let answerApplied = false;
-  let offerApplied = false;
+  let appliedOfferTs = 0;
+  let appliedAnswerTs = 0;
+
   (async function pollLoop() {
     while (!cancelled) {
       try {
         const { messages, now } = await pollSignals(opts.signalingUrl, opts.pairingId, since);
-        // Advance `since` even if no messages so we don't reprocess on each cycle.
         since = now;
+
+        // Pick the latest offer / answer (if any) so we ignore stale ones
+        // sitting in KV from previous sessions.
+        let latestOffer: SignalEnvelope | null = null;
+        let latestAnswer: SignalEnvelope | null = null;
+        const iceMsgs: SignalEnvelope[] = [];
+
         for (const env of messages) {
           if (env.from === myPubkeyB64) continue;
           const p = env.payload;
-          try {
-            if (p.kind === 'offer' && !isInitiator && !offerApplied) {
-              offerApplied = true;
-              await pc.setRemoteDescription({ type: 'offer', sdp: p.sdp });
-              const answer = await pc.createAnswer();
-              await pc.setLocalDescription(answer);
-              await postSignal(opts.signalingUrl, opts.pairingId, myPubkeyB64, { kind: 'answer', sdp: answer.sdp ?? '' });
-            } else if (p.kind === 'answer' && isInitiator && !answerApplied) {
-              answerApplied = true;
-              await pc.setRemoteDescription({ type: 'answer', sdp: p.sdp });
-            } else if (p.kind === 'ice' && p.candidate) {
-              try { await pc.addIceCandidate(p.candidate); }
-              catch (err) { console.warn('[pair-rtc] addIceCandidate failed:', err); }
-            }
-          } catch (err) {
-            console.error('[pair-rtc] applying signal failed:', err);
+          if (p.kind === 'offer') {
+            if (!latestOffer || env.ts > latestOffer.ts) latestOffer = env;
+          } else if (p.kind === 'answer') {
+            if (!latestAnswer || env.ts > latestAnswer.ts) latestAnswer = env;
+          } else if (p.kind === 'ice') {
+            iceMsgs.push(env);
           }
+        }
+
+        try {
+          if (latestOffer && !isInitiator && latestOffer.ts > appliedOfferTs) {
+            appliedOfferTs = latestOffer.ts;
+            const p = latestOffer.payload as { kind: 'offer'; sdp: string };
+            await pc.setRemoteDescription({ type: 'offer', sdp: p.sdp });
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            await postSignal(opts.signalingUrl, opts.pairingId, myPubkeyB64, { kind: 'answer', sdp: answer.sdp ?? '' });
+          }
+          if (latestAnswer && isInitiator && latestAnswer.ts > appliedAnswerTs) {
+            appliedAnswerTs = latestAnswer.ts;
+            const p = latestAnswer.payload as { kind: 'answer'; sdp: string };
+            await pc.setRemoteDescription({ type: 'answer', sdp: p.sdp });
+          }
+          for (const env of iceMsgs) {
+            const p = env.payload as { kind: 'ice'; candidate: RTCIceCandidateInit };
+            if (!p.candidate) continue;
+            try { await pc.addIceCandidate(p.candidate); }
+            catch { /* stale ICE from prior session — harmless */ }
+          }
+        } catch (err) {
+          console.error('[pair-rtc] applying signal failed:', err);
         }
       } catch (err) {
         console.warn('[pair-rtc] poll failed (will retry):', err);
