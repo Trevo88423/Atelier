@@ -393,6 +393,24 @@ function Header({ src, manifest, parseErr, status, viaProxy }: {
   status: string;
   viaProxy: boolean;
 }) {
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
+
+  const shareUrl = `${window.location.origin}/view?src=${encodeURIComponent(src)}`;
+  // Note: any #token=… fragment is deliberately NOT included. Tokens are auth
+  // credentials; sharing them grants access. A future "share with token"
+  // affordance can opt in to that behaviour.
+
+  const handleShare = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopyState('copied');
+      setTimeout(() => setCopyState('idle'), 1800);
+    } catch {
+      setCopyState('failed');
+      setTimeout(() => setCopyState('idle'), 2500);
+    }
+  };
+
   return (
     <div style={{
       padding: '10px 16px',
@@ -443,6 +461,28 @@ function Header({ src, manifest, parseErr, status, viaProxy }: {
         </span>
       )}
       <div style={{ flex: 1 }} />
+      <button
+        onClick={handleShare}
+        title={
+          copyState === 'failed'
+            ? `Couldn't copy — link is: ${shareUrl}`
+            : `Copy a shareable link to this artifact (no token included)`
+        }
+        style={{
+          padding: '4px 12px',
+          borderRadius: 6,
+          border: '1px solid',
+          borderColor: copyState === 'copied' ? '#14532d' : copyState === 'failed' ? '#7f1d1d' : '#334155',
+          background: copyState === 'copied' ? '#0f2a1f' : copyState === 'failed' ? '#1e1215' : 'transparent',
+          color: copyState === 'copied' ? '#86efac' : copyState === 'failed' ? '#fca5a5' : '#cbd5e1',
+          fontSize: 12,
+          fontWeight: 500,
+          cursor: 'pointer',
+          transition: 'all 150ms',
+        }}
+      >
+        {copyState === 'copied' ? 'Copied ✓' : copyState === 'failed' ? 'Copy failed' : 'Share link'}
+      </button>
       <span style={{ fontSize: 12, color: '#64748b' }}>{status}</span>
     </div>
   );
