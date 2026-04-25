@@ -1,0 +1,11 @@
+name = "stele-cors-proxy"
+main = "src/index.ts"
+compatibility_date = "2026-04-25"
+
+# Production deployment: point stele.au/fetch* at this worker via a route.
+# For now it only runs under `wrangler dev` — wire the domain route when
+# stele.au DNS is live.
+#
+# [[routes]]
+# pattern = "stele.au/fetch*"
+# custom_domain = false

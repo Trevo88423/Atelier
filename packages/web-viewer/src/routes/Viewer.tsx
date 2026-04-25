@@ -24,11 +24,48 @@ import {
 } from '@stele/runtime';
 import { attachBridge, type BridgeStatus } from '../bridge';
 
+type FetchErrReason = 'http' | 'network' | 'proxy';
 type FetchState =
   | { kind: 'idle' }
   | { kind: 'loading' }
-  | { kind: 'ok'; source: string; kind_: 'jsx' | 'tsx' | 'html' }
-  | { kind: 'err'; message: string; reason: 'http' | 'network' };
+  | { kind: 'ok'; source: string; kind_: 'jsx' | 'tsx' | 'html'; viaProxy: boolean }
+  | { kind: 'err'; message: string; reason: FetchErrReason };
+
+const PROXY_URL: string | undefined = import.meta.env.VITE_PROXY_URL;
+
+async function fetchArtifact(src: string): Promise<{ source: string; contentType: string | null; viaProxy: boolean }> {
+  // Try direct first — permissive sources (GitHub raw, jsDelivr, CDNs) work without
+  // the proxy and stay fast. If the browser rejects the request before a response
+  // arrives (TypeError), fall through to the proxy.
+  try {
+    const resp = await fetch(src, { mode: 'cors' });
+    if (!resp.ok) {
+      const err = new Error(`HTTP ${resp.status} ${resp.statusText}`);
+      (err as Error & { httpStatus?: number }).httpStatus = resp.status;
+      throw err;
+    }
+    return { source: await resp.text(), contentType: resp.headers.get('content-type'), viaProxy: false };
+  } catch (err) {
+    // HTTP error reached us — don't fall back, the proxy won't help.
+    if (err instanceof Error && 'httpStatus' in err) throw err;
+    // No proxy configured — give up.
+    if (!PROXY_URL) throw err;
+
+    let proxyResp: Response;
+    try {
+      proxyResp = await fetch(`${PROXY_URL}?url=${encodeURIComponent(src)}`);
+    } catch (proxyErr) {
+      throw new Error(`Direct fetch blocked; proxy at ${PROXY_URL} is also unreachable: ${proxyErr instanceof Error ? proxyErr.message : String(proxyErr)}`);
+    }
+    if (!proxyResp.ok) {
+      const body = await proxyResp.json().catch(() => ({ error: `Proxy HTTP ${proxyResp.status}` })) as { error?: string };
+      const err = new Error(body.error ?? `Proxy HTTP ${proxyResp.status}`);
+      (err as Error & { proxy?: boolean }).proxy = true;
+      throw err;
+    }
+    return { source: await proxyResp.text(), contentType: proxyResp.headers.get('content-type'), viaProxy: true };
+  }
+}
 
 function detectKind(url: string, contentType: string | null): 'jsx' | 'tsx' | 'html' {
   const ext = url.split('?')[0].split('#')[0].split('.').pop()?.toLowerCase();
@@ -70,20 +107,15 @@ export default function Viewer() {
 
     (async () => {
       try {
-        const resp = await fetch(src, { mode: 'cors' });
-        if (!resp.ok) {
-          // HTTP error — distinguish from CORS / network errors so the hint
-          // in the UI is accurate.
-          if (!cancelled) setFetchState({ kind: 'err', message: `HTTP ${resp.status} ${resp.statusText}`, reason: 'http' });
-          return;
-        }
-        const source = await resp.text();
-        const kind_ = detectKind(src, resp.headers.get('content-type'));
-        if (!cancelled) setFetchState({ kind: 'ok', source, kind_ });
+        const { source, contentType, viaProxy } = await fetchArtifact(src);
+        if (cancelled) return;
+        const kind_ = detectKind(src, contentType);
+        setFetchState({ kind: 'ok', source, kind_, viaProxy });
       } catch (err) {
-        // TypeError thrown by fetch usually means CORS, DNS failure, or the
-        // server blocked the request before returning headers.
-        if (!cancelled) setFetchState({ kind: 'err', message: String(err instanceof Error ? err.message : err), reason: 'network' });
+        if (cancelled) return;
+        const e = err as Error & { httpStatus?: number; proxy?: boolean };
+        const reason: FetchErrReason = e.proxy ? 'proxy' : e.httpStatus ? 'http' : 'network';
+        setFetchState({ kind: 'err', message: e.message || String(err), reason });
       }
     })();
 
@@ -176,6 +208,7 @@ export default function Viewer() {
         manifest={manifest}
         parseErr={parseErr}
         status={fetchState.kind === 'loading' ? 'fetching' : status}
+        viaProxy={fetchState.kind === 'ok' && fetchState.viaProxy}
       />
     }>
       {fetchState.kind === 'loading' && <Centered>Fetching artifact…</Centered>}
@@ -185,9 +218,11 @@ export default function Viewer() {
             Could not fetch <code>{src}</code>
             <div style={{ marginTop: 8, color: '#94a3b8' }}>{fetchState.message}</div>
             <div style={{ marginTop: 16, fontSize: 12, color: '#64748b' }}>
-              {fetchState.reason === 'http'
-                ? 'The server responded — check the URL and that the file exists.'
-                : 'The request was blocked before a response arrived. Usually this means CORS, DNS, or an offline server. A CORS proxy is planned for a future release.'}
+              {fetchState.reason === 'http' && 'The server responded — check the URL and that the file exists.'}
+              {fetchState.reason === 'proxy' && 'The CORS proxy rejected the request. Check the extension and origin restrictions.'}
+              {fetchState.reason === 'network' && (PROXY_URL
+                ? 'Both direct and proxy fetches failed. Is the proxy running?'
+                : 'The request was blocked before a response arrived — usually CORS, DNS, or an offline server. No proxy is configured.')}
             </div>
           </div>
         </Centered>
@@ -250,11 +285,12 @@ function Centered({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Header({ src, manifest, parseErr, status }: {
+function Header({ src, manifest, parseErr, status, viaProxy }: {
   src: string;
   manifest: Manifest | null;
   parseErr: string | null;
   status: string;
+  viaProxy: boolean;
 }) {
   return (
     <div style={{
@@ -288,6 +324,21 @@ function Header({ src, manifest, parseErr, status }: {
           border: '1px solid #7f1d1d',
         }}>
           manifest error
+        </span>
+      )}
+      {viaProxy && (
+        <span
+          title="Direct fetch was blocked by CORS; the artifact came through the Stele CORS proxy."
+          style={{
+            fontSize: 11,
+            padding: '2px 6px',
+            borderRadius: 4,
+            background: '#2a1f0f',
+            color: '#fcd34d',
+            border: '1px solid #78350f',
+          }}
+        >
+          via proxy
         </span>
       )}
       <div style={{ flex: 1 }} />
