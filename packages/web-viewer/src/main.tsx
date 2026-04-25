@@ -17,3 +17,14 @@ createRoot(rootEl).render(
     </BrowserRouter>
   </StrictMode>,
 );
+
+// Register the service worker for offline app-shell caching + installability.
+// Skipped in dev because Vite's HMR interacts badly with SW caching; SW runs
+// in production builds only.
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((err) => {
+      console.warn('[stele] service worker registration failed:', err);
+    });
+  });
+}
