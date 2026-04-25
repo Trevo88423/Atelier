@@ -9,7 +9,7 @@
  */
 
 import { build } from 'esbuild';
-import { mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { mkdirSync, writeFileSync, readFileSync, copyFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -21,6 +21,14 @@ const VENDOR_SRC = join(ROOT, 'vendor-src', 'node_modules');
 const VENDOR_OUTS = [
   join(ROOT, 'public', 'vendor'),
   join(ROOT, 'packages', 'web-viewer', 'public', 'vendor'),
+];
+// esbuild.wasm sits at each app's public root, served at /esbuild.wasm and
+// loaded by the sandbox transform. Copy from the workspace's installed
+// esbuild-wasm package.
+const WASM_SRC = join(ROOT, 'node_modules', 'esbuild-wasm', 'esbuild.wasm');
+const WASM_OUTS = [
+  join(ROOT, 'public', 'esbuild.wasm'),
+  join(ROOT, 'packages', 'web-viewer', 'public', 'esbuild.wasm'),
 ];
 
 // Maps package name → { global, entry? (override), externals }
@@ -178,7 +186,14 @@ async function main() {
   console.log(`  jsx-runtime shim → window._jsx_runtime`);
   console.log(`    ✓ react-jsx-runtime.umd.js (${(jsxShim.length / 1024).toFixed(1)}KB)`);
 
-  console.log(`\nDone. Vendor bundles written to:\n  ${VENDOR_OUTS.map((p) => `- ${p}`).join('\n  ')}`);
+  // Copy esbuild.wasm to each app's public/.
+  console.log('\nCopying esbuild.wasm…');
+  for (const out of WASM_OUTS) {
+    copyFileSync(WASM_SRC, out);
+    console.log(`    ✓ ${out}`);
+  }
+
+  console.log(`\nDone. Vendor bundles + wasm written to ${VENDOR_OUTS.length} apps.`);
 }
 
 main();
