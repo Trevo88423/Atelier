@@ -1,3 +1,11 @@
+/**
+ * @stele-manifest
+ * name: Battleship
+ * version: 1.0.0
+ * description: Classic Battleship — place your fleet, take turns guessing the AI's grid. Self-contained, no network. Demonstrates a non-trivial game artifact running entirely inside the Stele sandbox.
+ * archetype: self-contained
+ */
+
 import { useState, useEffect } from "react";
 import { Anchor, Crosshair, RotateCcw, Trophy, Skull, Ship, Flag } from "lucide-react";
 
