@@ -28,7 +28,7 @@ type FetchState =
   | { kind: 'idle' }
   | { kind: 'loading' }
   | { kind: 'ok'; source: string; kind_: 'jsx' | 'tsx' | 'html' }
-  | { kind: 'err'; message: string };
+  | { kind: 'err'; message: string; reason: 'http' | 'network' };
 
 function detectKind(url: string, contentType: string | null): 'jsx' | 'tsx' | 'html' {
   const ext = url.split('?')[0].split('#')[0].split('.').pop()?.toLowerCase();
@@ -71,12 +71,19 @@ export default function Viewer() {
     (async () => {
       try {
         const resp = await fetch(src, { mode: 'cors' });
-        if (!resp.ok) throw new Error(`Fetch failed: ${resp.status} ${resp.statusText}`);
+        if (!resp.ok) {
+          // HTTP error — distinguish from CORS / network errors so the hint
+          // in the UI is accurate.
+          if (!cancelled) setFetchState({ kind: 'err', message: `HTTP ${resp.status} ${resp.statusText}`, reason: 'http' });
+          return;
+        }
         const source = await resp.text();
         const kind_ = detectKind(src, resp.headers.get('content-type'));
         if (!cancelled) setFetchState({ kind: 'ok', source, kind_ });
       } catch (err) {
-        if (!cancelled) setFetchState({ kind: 'err', message: String(err instanceof Error ? err.message : err) });
+        // TypeError thrown by fetch usually means CORS, DNS failure, or the
+        // server blocked the request before returning headers.
+        if (!cancelled) setFetchState({ kind: 'err', message: String(err instanceof Error ? err.message : err), reason: 'network' });
       }
     })();
 
@@ -178,8 +185,9 @@ export default function Viewer() {
             Could not fetch <code>{src}</code>
             <div style={{ marginTop: 8, color: '#94a3b8' }}>{fetchState.message}</div>
             <div style={{ marginTop: 16, fontSize: 12, color: '#64748b' }}>
-              Hint: the source server must allow cross-origin requests from this page.
-              A CORS proxy is planned for a future release.
+              {fetchState.reason === 'http'
+                ? 'The server responded — check the URL and that the file exists.'
+                : 'The request was blocked before a response arrived. Usually this means CORS, DNS, or an offline server. A CORS proxy is planned for a future release.'}
             </div>
           </div>
         </Centered>
