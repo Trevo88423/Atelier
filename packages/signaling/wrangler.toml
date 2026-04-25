@@ -1,0 +1,19 @@
+name = "stele-signaling"
+main = "src/index.ts"
+compatibility_date = "2026-04-25"
+
+# KV namespace for ephemeral signaling messages.
+# Create the namespace once with:
+#   pnpm --filter @stele/signaling exec wrangler kv namespace create stele-signaling
+# Then paste the returned id into `id` below.
+# Local `wrangler dev` provides an in-memory KV without needing this id.
+[[kv_namespaces]]
+binding = "SIGNALING_KV"
+id = "3a459d5f697f4146846c6acddd4c4d54"
+
+# Production deployment: point stele.au/signal* at this worker via a route
+# when the signaling endpoint goes public.
+#
+# [[routes]]
+# pattern = "stele.au/signal*"
+# custom_domain = false

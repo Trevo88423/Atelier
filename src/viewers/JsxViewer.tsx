@@ -103,6 +103,8 @@ export default function JsxViewer({
         pairKeys: manifest?.archetype === 'paired' && manifest.private_key && manifest.partner_pubkey
           ? { privateKey: manifest.private_key, partnerPublicKey: manifest.partner_pubkey }
           : null,
+        pairingId: manifest?.archetype === 'paired' ? manifest.pairing_id ?? null : null,
+        signalingUrl: manifest?.archetype === 'paired' ? manifest.signaling ?? null : null,
       },
     );
     cleanupRef.current = cleanup;

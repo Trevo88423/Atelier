@@ -19,6 +19,8 @@ import {
   deriveSharedKeyFromBase64,
   encryptWithSharedKey,
   decryptWithSharedKey,
+  connectPair,
+  type PairConnection,
 } from '@stele/runtime';
 
 /** Only http/https URLs are permitted for external navigation. */
@@ -182,7 +184,14 @@ export interface BridgeOptions {
   serverOrigin?: string | null;
   /** Manifest's private_key + partner_pubkey for Archetype C. Enables `pair.encrypt`/`pair.decrypt`. */
   pairKeys?: { privateKey: string; partnerPublicKey: string } | null;
+  /** Manifest.pairing_id for Archetype C. Required for `pair.connect`. */
+  pairingId?: string | null;
+  /** Manifest.signaling override for Archetype C. Falls back to the project default. */
+  signalingUrl?: string | null;
 }
+
+/** Default signaling endpoint when an artifact doesn't override `signaling:` in the manifest. */
+const DEFAULT_SIGNALING_URL = 'https://stele-signaling.unscramble-apiworkersdev.workers.dev';
 
 export function attachBridge(
   iframe: HTMLIFrameElement,
@@ -206,6 +215,14 @@ export function attachBridge(
       );
     }
     return pairKeyPromise;
+  };
+
+  // Long-lived peer connection for Tier 1 Strong paired artifacts. One per
+  // artifact bridge — closed when the bridge tears down.
+  let pairConn: PairConnection | null = null;
+  const closePairConn = () => {
+    try { pairConn?.close(); } catch { /* swallow */ }
+    pairConn = null;
   };
 
   const portHandler = async (pev: MessageEvent) => {
@@ -279,6 +296,43 @@ export function attachBridge(
           reply(await decryptWithSharedKey(key, ciphertext, iv));
           break;
         }
+        case 'pair.connect': {
+          if (!options.pairKeys || !options.pairingId) {
+            reply(null, 'pair.connect requires a paired artifact with pairing_id + private_key + partner_pubkey');
+            break;
+          }
+          if (pairConn) {
+            // Already connected — reply with current status; idempotent.
+            reply({ status: pairConn.status });
+            break;
+          }
+          const conn = await connectPair({
+            pairingId: options.pairingId,
+            privateKeyB64: options.pairKeys.privateKey,
+            partnerPublicKeyB64: options.pairKeys.partnerPublicKey,
+            signalingUrl: options.signalingUrl ?? DEFAULT_SIGNALING_URL,
+          });
+          pairConn = conn;
+          conn.onMessage((data) => {
+            port?.postMessage({ kind: 'event', topic: 'pair.message', payload: data });
+          });
+          conn.onStatusChange((status) => {
+            port?.postMessage({ kind: 'event', topic: 'pair.status', payload: status });
+          });
+          reply({ status: conn.status });
+          break;
+        }
+        case 'pair.send': {
+          if (!pairConn) { reply(null, 'pair.send: not connected (call pair.connect first)'); break; }
+          await pairConn.send(String(msg.params?.data ?? ''));
+          reply(null);
+          break;
+        }
+        case 'pair.close': {
+          closePairConn();
+          reply(null);
+          break;
+        }
         default:
           reply(null, `Unknown RPC method: ${msg.method}`);
       }
@@ -314,6 +368,7 @@ export function attachBridge(
   window.addEventListener('message', windowHandler);
   return () => {
     window.removeEventListener('message', windowHandler);
+    closePairConn();
     port?.close();
     port = null;
   };

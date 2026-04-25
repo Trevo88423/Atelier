@@ -11,3 +11,4 @@ export * from './manifest';
 export * from './sandbox';
 export * from './transform';
 export * from './pair-crypto';
+export * from './pair-rtc';

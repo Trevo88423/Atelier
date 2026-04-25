@@ -121,15 +121,42 @@ const BOOT_SCRIPT = `
   var pending = new Map();
   var rpcId = 0;
 
-  // RPC responses arrive here — forgeable window-level messages are ignored.
+  // Push-style events from host → artifact (pair.message, pair.status, etc.).
+  // Per-topic handler arrays so multiple subscribers can attach.
+  var eventHandlers = {};
+
+  function dispatchEvent(topic, payload) {
+    var hs = eventHandlers[topic];
+    if (!hs) return;
+    for (var i = 0; i < hs.length; i++) {
+      try { hs[i](payload); } catch (e) { /* swallow */ }
+    }
+  }
+
+  function subscribe(topic, handler) {
+    var hs = eventHandlers[topic];
+    if (!hs) { hs = []; eventHandlers[topic] = hs; }
+    hs.push(handler);
+    return function() {
+      var idx = hs.indexOf(handler);
+      if (idx >= 0) hs.splice(idx, 1);
+    };
+  }
+
+  // RPC responses + push events arrive on the port. Forgeable window-level
+  // messages are ignored.
   port.onmessage = function(ev) {
     var msg = ev.data;
-    if (!msg || msg.kind !== 'rpc-result') return;
-    var p = pending.get(msg.id);
-    if (!p) return;
-    pending.delete(msg.id);
-    if (msg.error) { p.reject(new Error(msg.error)); }
-    else { p.resolve(msg.result); }
+    if (!msg) return;
+    if (msg.kind === 'rpc-result') {
+      var p = pending.get(msg.id);
+      if (!p) return;
+      pending.delete(msg.id);
+      if (msg.error) { p.reject(new Error(msg.error)); }
+      else { p.resolve(msg.result); }
+    } else if (msg.kind === 'event' && typeof msg.topic === 'string') {
+      dispatchEvent(msg.topic, msg.payload);
+    }
   };
 
   // Hand port1 to host. All subsequent RPC flows over this channel.
@@ -172,6 +199,20 @@ const BOOT_SCRIPT = `
       },
       decrypt: function(ciphertext, iv) {
         return rpc('pair.decrypt', { ciphertext: ciphertext, iv: iv });
+      },
+      // Live two-peer connection (Tier 1 Strong). connect() returns a session
+      // object you can send/close on. onMessage / onStatusChange subscribe
+      // to push events from the partner peer + connection state.
+      connect: function() {
+        return rpc('pair.connect', {}).then(function(initial) {
+          return {
+            send: function(data) { return rpc('pair.send', { data: String(data) }); },
+            close: function() { return rpc('pair.close', {}); },
+            onMessage: function(handler) { return subscribe('pair.message', handler); },
+            onStatusChange: function(handler) { return subscribe('pair.status', handler); },
+            initialStatus: initial && initial.status,
+          };
+        });
       },
     },
   };

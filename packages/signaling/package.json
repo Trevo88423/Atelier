@@ -1,0 +1,19 @@
+{
+  "name": "@stele/signaling",
+  "version": "0.1.0",
+  "description": "Stele signaling — Cloudflare Worker that brokers SDP/ICE exchange between paired Stele artifacts.",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev --port 8788",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc -b"
+  },
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250131.0",
+    "typescript": "~6.0.2",
+    "wrangler": "^3.108.0"
+  }
+}

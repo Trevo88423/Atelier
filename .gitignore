@@ -23,6 +23,9 @@ public/esbuild.wasm
 packages/*/public/vendor/
 packages/*/public/esbuild.wasm
 
+# Cloudflare Workers / wrangler local-dev state
+packages/*/.wrangler/
+
 # Vendor source deps
 vendor-src/node_modules/
 
