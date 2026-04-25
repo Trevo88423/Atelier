@@ -151,9 +151,9 @@ const BOOT_SCRIPT = `
     list:   function(prefix, shared) { return rpc('storage.list',   { prefix: prefix, shared: !!shared }); },
   };
 
-  // window.stele — platform namespace. Server proxy is defined for every
-  // artifact; the host rejects the call if the manifest didn't declare a
-  // server (i.e. archetype != 'client-view').
+  // window.stele — platform namespace. server / pair proxies are defined
+  // for every artifact; the host rejects the call if the manifest didn't
+  // declare the matching archetype fields.
   window.stele = {
     server: {
       fetch: function(path, options) {
@@ -164,6 +164,14 @@ const BOOT_SCRIPT = `
           headers: opts.headers,
           body: opts.body,
         });
+      },
+    },
+    pair: {
+      encrypt: function(plaintext) {
+        return rpc('pair.encrypt', { plaintext: String(plaintext) });
+      },
+      decrypt: function(ciphertext, iv) {
+        return rpc('pair.decrypt', { ciphertext: ciphertext, iv: iv });
       },
     },
   };

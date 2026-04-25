@@ -53,8 +53,11 @@ export interface Manifest {
   server?: string;
   /** Required when archetype === 'paired'. Opaque identifier shared with the partner artifact. */
   pairing_id?: string;
-  /** Required when archetype === 'paired'. Partner artifact's public key (base64). */
+  /** Required when archetype === 'paired'. Partner artifact's ECDH P-256 public key (base64 SPKI). */
   partner_pubkey?: string;
+  /** Optional for archetype === 'paired'. This artifact's own ECDH P-256 private key (base64 PKCS8).
+   *  Without it, window.stele.pair.encrypt/decrypt error — the artifact still gets the badge. */
+  private_key?: string;
   /** Optional for archetype === 'paired'. Signaling server URL; defaults to stele's reference server. */
   signaling?: string;
   requires: Capability[];
@@ -202,6 +205,10 @@ export function parseManifest(source: string): Manifest | null {
         if (!value) throw new Error(`Manifest: 'partner_pubkey' cannot be empty`);
         manifest.partner_pubkey = value;
         break;
+      case 'private_key':
+        if (!value) throw new Error(`Manifest: 'private_key' cannot be empty`);
+        manifest.private_key = value;
+        break;
       case 'signaling':
         if (!isHttpsUrl(value)) {
           throw new Error(`Manifest: 'signaling' must be an https:// URL, got '${value}'`);
@@ -239,9 +246,12 @@ export function parseManifest(source: string): Manifest | null {
   if (manifest.archetype === 'paired') {
     if (!manifest.pairing_id) throw new Error(`Manifest: archetype 'paired' requires a 'pairing_id' field`);
     if (!manifest.partner_pubkey) throw new Error(`Manifest: archetype 'paired' requires a 'partner_pubkey' field`);
+    // private_key is optional — paired artifacts can declare just the badge
+    // for transparency without exposing crypto material.
   } else {
     if (manifest.pairing_id) throw new Error(`Manifest: 'pairing_id' is only valid for archetype 'paired'`);
     if (manifest.partner_pubkey) throw new Error(`Manifest: 'partner_pubkey' is only valid for archetype 'paired'`);
+    if (manifest.private_key) throw new Error(`Manifest: 'private_key' is only valid for archetype 'paired'`);
     if (manifest.signaling) throw new Error(`Manifest: 'signaling' is only valid for archetype 'paired'`);
   }
 

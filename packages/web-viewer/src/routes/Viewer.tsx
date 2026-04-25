@@ -252,6 +252,9 @@ export default function Viewer() {
       {
         serverOrigin: manifest?.archetype === 'client-view' ? manifest.server ?? null : null,
         token,
+        pairKeys: manifest?.archetype === 'paired' && manifest.private_key && manifest.partner_pubkey
+          ? { privateKey: manifest.private_key, partnerPublicKey: manifest.partner_pubkey }
+          : null,
       },
     );
     return cleanup;

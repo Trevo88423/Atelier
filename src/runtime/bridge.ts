@@ -15,6 +15,11 @@
 import { getDb } from '../lib/db';
 import { open as shellOpen } from '@tauri-apps/plugin-shell';
 import { getToken } from '../lib/tokens';
+import {
+  deriveSharedKeyFromBase64,
+  encryptWithSharedKey,
+  decryptWithSharedKey,
+} from '@stele/runtime';
 
 /** Only http/https URLs are permitted for external navigation. */
 function isSafeExternalUrl(raw: string): boolean {
@@ -175,6 +180,8 @@ async function storageList(artifactId: string, prefix: string, shared: boolean) 
 export interface BridgeOptions {
   /** Manifest.server for Archetype B artifacts. Enables `server.fetch` RPC. */
   serverOrigin?: string | null;
+  /** Manifest's private_key + partner_pubkey for Archetype C. Enables `pair.encrypt`/`pair.decrypt`. */
+  pairKeys?: { privateKey: string; partnerPublicKey: string } | null;
 }
 
 export function attachBridge(
@@ -184,6 +191,22 @@ export function attachBridge(
   options: BridgeOptions = {}
 ): () => void {
   let port: MessagePort | null = null;
+
+  // Lazily derive the pair shared key on first encrypt/decrypt; cache for
+  // the bridge's lifetime so subsequent calls skip the derivation cost.
+  let pairKeyPromise: Promise<CryptoKey> | null = null;
+  const pairKey = (): Promise<CryptoKey> => {
+    if (!options.pairKeys) {
+      return Promise.reject(new Error('pair.* is only available for paired artifacts with private_key + partner_pubkey'));
+    }
+    if (!pairKeyPromise) {
+      pairKeyPromise = deriveSharedKeyFromBase64(
+        options.pairKeys.privateKey,
+        options.pairKeys.partnerPublicKey,
+      );
+    }
+    return pairKeyPromise;
+  };
 
   const portHandler = async (pev: MessageEvent) => {
     const msg = pev.data;
@@ -237,6 +260,23 @@ export function attachBridge(
           }
           const result = await serverFetch(artifactId, options.serverOrigin, msg.params || {});
           reply(result);
+          break;
+        }
+        case 'pair.encrypt': {
+          const plaintext = String(msg.params?.plaintext ?? '');
+          const key = await pairKey();
+          reply(await encryptWithSharedKey(key, plaintext));
+          break;
+        }
+        case 'pair.decrypt': {
+          const ciphertext = String(msg.params?.ciphertext ?? '');
+          const iv = String(msg.params?.iv ?? '');
+          if (!ciphertext || !iv) {
+            reply(null, `pair.decrypt requires { ciphertext, iv }`);
+            break;
+          }
+          const key = await pairKey();
+          reply(await decryptWithSharedKey(key, ciphertext, iv));
           break;
         }
         default:

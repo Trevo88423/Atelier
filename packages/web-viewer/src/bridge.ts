@@ -13,6 +13,11 @@
  */
 
 import * as idb from './idb';
+import {
+  deriveSharedKeyFromBase64,
+  encryptWithSharedKey,
+  decryptWithSharedKey,
+} from '@stele/runtime';
 
 export type BridgeStatus = 'loading' | 'ready' | 'mounted' | 'error';
 
@@ -26,6 +31,8 @@ export interface BridgeOptions {
   serverOrigin?: string | null;
   /** Bearer token for Archetype B. Injected as Authorization header. */
   token?: string | null;
+  /** Manifest's private_key + partner_pubkey for Archetype C. Enables `pair.encrypt`/`pair.decrypt`. */
+  pairKeys?: { privateKey: string; partnerPublicKey: string } | null;
 }
 
 function storageScope(artifactId: string, shared: boolean): string {
@@ -107,6 +114,20 @@ export function attachBridge(
 ): () => void {
   let port: MessagePort | null = null;
 
+  let pairKeyPromise: Promise<CryptoKey> | null = null;
+  const pairKey = (): Promise<CryptoKey> => {
+    if (!options.pairKeys) {
+      return Promise.reject(new Error('pair.* is only available for paired artifacts with private_key + partner_pubkey'));
+    }
+    if (!pairKeyPromise) {
+      pairKeyPromise = deriveSharedKeyFromBase64(
+        options.pairKeys.privateKey,
+        options.pairKeys.partnerPublicKey,
+      );
+    }
+    return pairKeyPromise;
+  };
+
   const portHandler = async (pev: MessageEvent) => {
     const msg = pev.data;
     if (!port || !msg || msg.kind !== 'rpc' || typeof msg.method !== 'string') return;
@@ -148,6 +169,23 @@ export function attachBridge(
           }
           const result = await serverFetch(options.serverOrigin, options.token, msg.params || {});
           reply(result);
+          break;
+        }
+        case 'pair.encrypt': {
+          const plaintext = String(msg.params?.plaintext ?? '');
+          const key = await pairKey();
+          reply(await encryptWithSharedKey(key, plaintext));
+          break;
+        }
+        case 'pair.decrypt': {
+          const ciphertext = String(msg.params?.ciphertext ?? '');
+          const iv = String(msg.params?.iv ?? '');
+          if (!ciphertext || !iv) {
+            reply(null, `pair.decrypt requires { ciphertext, iv }`);
+            break;
+          }
+          const key = await pairKey();
+          reply(await decryptWithSharedKey(key, ciphertext, iv));
           break;
         }
         default:

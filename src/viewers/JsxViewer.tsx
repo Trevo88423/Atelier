@@ -98,7 +98,12 @@ export default function JsxViewer({
         onStatusChange: (s) => onStatusChange?.(s),
         onError: (msg) => onError?.(msg),
       },
-      { serverOrigin: manifest?.archetype === 'client-view' ? manifest.server ?? null : null },
+      {
+        serverOrigin: manifest?.archetype === 'client-view' ? manifest.server ?? null : null,
+        pairKeys: manifest?.archetype === 'paired' && manifest.private_key && manifest.partner_pubkey
+          ? { privateKey: manifest.private_key, partnerPublicKey: manifest.partner_pubkey }
+          : null,
+      },
     );
     cleanupRef.current = cleanup;
     return cleanup;
