@@ -9,6 +9,13 @@ compatibility_date = "2026-04-25"
 name = "ROOMS"
 class_name = "RoomDO"
 
+# RateLimitDO: one instance per client IP. Rolling 60s + 24h counters
+# throttle abuse on the public demo without blocking real users
+# (60/min, 2000/day — comfortably above any single-user pair-chat session).
+[[durable_objects.bindings]]
+name = "RATE_LIMITS"
+class_name = "RateLimitDO"
+
 # Initial migration creating the RoomDO class. Uses the SQLite-backed
 # storage variant which is available on the free Workers plan
 # (`new_classes` requires Workers Paid). Add `renamed_classes` /
@@ -16,6 +23,10 @@ class_name = "RoomDO"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["RoomDO"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["RateLimitDO"]
 
 # Production deployment: point stele.au/signal* at this worker via a route
 # when the signaling endpoint goes public.
