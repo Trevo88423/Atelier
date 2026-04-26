@@ -6,8 +6,9 @@
  * could build" grid that exists to fire imagination, not pitch features.
  */
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { openFileInViewer, ACCEPTED_INPUT_ATTR } from '../components/DropToOpen';
 
 const RAW_BASE = 'https://raw.githubusercontent.com/stele-app/stele/main/examples';
 
@@ -75,7 +76,16 @@ const USE_CASES: UseCaseGroup[] = [
 
 export default function Landing() {
   const [urlInput, setUrlInput] = useState('');
+  const [openError, setOpenError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+
+  const handleFilePicked = async (file: File | null | undefined) => {
+    setOpenError(null);
+    if (!file) return;
+    const result = await openFileInViewer(file, navigate);
+    if (!result.ok) setOpenError(result.error);
+  };
 
   const open = (rawIn?: string) => {
     const raw = (rawIn ?? urlInput).trim();
@@ -164,11 +174,41 @@ export default function Landing() {
               Open
             </button>
           </div>
-          <div style={{ fontSize: 12, color: '#64748b', marginTop: 8 }}>
-            Paste a link to a <code style={inlineCode}>.stele</code>, <code style={inlineCode}>.jsx</code>, or <code style={inlineCode}>.tsx</code> file. GitHub raw / jsDelivr / any HTTPS host.
+          <div style={{ fontSize: 12, color: '#64748b', marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span>
+              Paste a link to a <code style={inlineCode}>.stele</code>, <code style={inlineCode}>.jsx</code>, or <code style={inlineCode}>.tsx</code> file, drop a file anywhere on the page, or
+            </span>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPTED_INPUT_ATTR}
+              style={{ display: 'none' }}
+              onChange={(e) => { handleFilePicked(e.target.files?.[0]); e.target.value = ''; }}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                padding: '2px 10px',
+                borderRadius: 6,
+                border: '1px solid #334155',
+                background: 'transparent',
+                color: '#cbd5e1',
+                fontSize: 12,
+                fontWeight: 500,
+                cursor: 'pointer',
+              }}
+            >
+              open a file
+            </button>
           </div>
+          {openError && (
+            <div style={{ marginTop: 8, color: '#fca5a5', fontSize: 12, fontFamily: 'ui-monospace, monospace' }}>
+              {openError}
+            </div>
+          )}
 
           <div style={{ marginTop: 28, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <Link to="/pair" style={ctaLinkStyle}>Generate paired chat →</Link>
             <Link to="/library" style={navLinkStyle}>Library</Link>
             <Link to="/settings" style={navLinkStyle}>Settings</Link>
             <a href="https://github.com/stele-app/stele" target="_blank" rel="noopener" style={navLinkStyle}>GitHub</a>
@@ -370,5 +410,16 @@ const navLinkStyle: React.CSSProperties = {
   color: '#cbd5e1',
   fontSize: 12,
   fontWeight: 500,
+  textDecoration: 'none',
+};
+
+const ctaLinkStyle: React.CSSProperties = {
+  padding: '6px 12px',
+  borderRadius: 6,
+  border: '1px solid #1e3a8a',
+  background: '#1e3a8a',
+  color: '#dbeafe',
+  fontSize: 12,
+  fontWeight: 600,
   textDecoration: 'none',
 };

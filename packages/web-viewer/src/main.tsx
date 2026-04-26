@@ -5,6 +5,8 @@ import Landing from './routes/Landing';
 import Viewer from './routes/Viewer';
 import Library from './routes/Library';
 import Settings from './routes/Settings';
+import Pair from './routes/Pair';
+import DropToOpen from './components/DropToOpen';
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('#root not found');
@@ -12,11 +14,13 @@ if (!rootEl) throw new Error('#root not found');
 createRoot(rootEl).render(
   <StrictMode>
     <BrowserRouter>
+      <DropToOpen />
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/view" element={<Viewer />} />
         <Route path="/library" element={<Library />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/pair" element={<Pair />} />
       </Routes>
     </BrowserRouter>
   </StrictMode>,

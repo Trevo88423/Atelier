@@ -104,6 +104,40 @@ Note: file associations only register when installed via the platform installer 
 - **Backend:** Tauri 2, Rust, SQLite
 - **Sandbox:** esbuild-wasm for JSX/TSX transpilation, vendor UMD bundles, CSP-hardened iframe
 
+## Run your own signaling
+
+Paired artifacts (Archetype C — two `.stele` files holding ECDH-derived shared keys) talk to each other via WebRTC. The handshake needs a signaling server to relay SDP/ICE envelopes. Stele ships a reference signaling Worker in [`packages/signaling/`](packages/signaling/) and the `stele.au/pair` generator points artifacts at a public demo deployment of it.
+
+The default `https://stele-signaling.unscramble-apiworkersdev.workers.dev` is fine for trying things out. It's free-tier hosted, rate-limited per IP, and may be paused if abuse hits the cost ceiling — not for anything you depend on. For real use, run your own:
+
+```bash
+cd packages/signaling
+pnpm exec wrangler login
+pnpm exec wrangler deploy
+```
+
+Cloudflare prints your worker URL when deploy completes. In the manifest of any paired artifact, override the default by adding a `signaling:` line:
+
+```jsx
+/**
+ * @stele-manifest
+ * archetype: paired
+ * pairing_id: ...
+ * partner_pubkey: ...
+ * private_key: ...
+ * signaling: https://your-worker.workers.dev
+ */
+```
+
+Optional: for cross-NAT pairs that fall back to TURN relay, set up [Cloudflare Realtime / Calls](https://developers.cloudflare.com/realtime/) and push two secrets to the worker:
+
+```bash
+pnpm exec wrangler secret put CALLS_TOKEN_ID
+pnpm exec wrangler secret put CALLS_API_TOKEN
+```
+
+Free-tier Cloudflare gives you 100k Worker requests/day, 1M Durable Object operations/month, and 1 TB/mo of TURN bandwidth — comfortably tens of thousands of pair-chat sessions. No accounts on stele.au, no rate limits we control, no demo to pause.
+
 ## Privacy
 
 Stele is local-first and collects no data. See [PRIVACY.md](PRIVACY.md).
