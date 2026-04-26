@@ -50,17 +50,18 @@ function slug(s: string): string {
 function buildArtifactSource(opts: {
   selfName: string;
   partnerName: string;
+  pairName: string;
   pairingId: string;
   privateKey: string;
   partnerPublicKey: string;
 }): string {
   const description =
-    `Paired chat with ${opts.partnerName}. Open this file and have ${opts.partnerName} open theirs at the same time. ` +
+    `Paired chat between ${opts.selfName} and ${opts.partnerName}. Open this file and have ${opts.partnerName} open theirs at the same time. ` +
     `Messages travel end-to-end-encrypted over a WebRTC data channel — the signaling server only sees the SDP envelope.`;
 
   return `/**
  * @stele-manifest
- * name: Pair Chat — ${opts.selfName}
+ * name: ${opts.pairName}
  * version: 1.0.0
  * description: ${description}
  * archetype: paired
@@ -267,18 +268,26 @@ export default function PairGenerator() {
     try {
       const [kpA, kpB] = await Promise.all([generateKeyPair(), generateKeyPair()]);
       const pairingId = generatePairingId();
-      const filenameA = `pair-chat-${slug(aName)}.stele`;
-      const filenameB = `pair-chat-${slug(bName)}.stele`;
+      const safeA = aName.trim() || 'Person A';
+      const safeB = bName.trim() || 'Person B';
+      // Both files share this name so the conversation reads identically in
+      // each side's library. The pairing-id tail disambiguates multiple
+      // pairs between the same two people.
+      const pairName = `${safeA} ↔ ${safeB} #${pairingId.slice(-4)}`;
+      const filenameA = `pair-chat-${slug(aName)}-${pairingId.slice(-4)}.stele`;
+      const filenameB = `pair-chat-${slug(bName)}-${pairingId.slice(-4)}.stele`;
       const sourceA = buildArtifactSource({
-        selfName: aName.trim() || 'Person A',
-        partnerName: bName.trim() || 'Person B',
+        selfName: safeA,
+        partnerName: safeB,
+        pairName,
         pairingId,
         privateKey: kpA.privateKey,
         partnerPublicKey: kpB.publicKey,
       });
       const sourceB = buildArtifactSource({
-        selfName: bName.trim() || 'Person B',
-        partnerName: aName.trim() || 'Person A',
+        selfName: safeB,
+        partnerName: safeA,
+        pairName,
         pairingId,
         privateKey: kpB.privateKey,
         partnerPublicKey: kpA.publicKey,
