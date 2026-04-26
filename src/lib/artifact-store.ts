@@ -164,7 +164,9 @@ export async function importArtifact(
   }
 
   const ext = filename.split('.').pop()?.toLowerCase() || 'jsx';
-  const kind = (['jsx', 'tsx', 'html', 'svg', 'md', 'mermaid'].includes(ext) ? ext : 'jsx') as Artifact['kind'];
+  // .stele is the canonical extension but renders as JSX (single-file React component)
+  const normalisedExt = ext === 'stele' ? 'jsx' : ext;
+  const kind = (['jsx', 'tsx', 'html', 'svg', 'md', 'mermaid'].includes(normalisedExt) ? normalisedExt : 'jsx') as Artifact['kind'];
 
   const title = filename
     .replace(/\.[^.]+$/, '')

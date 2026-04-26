@@ -14,7 +14,7 @@ import { setToken } from '../lib/tokens';
 
 import demoSource from '../fixtures/demo.jsx?raw';
 
-const SUPPORTED_EXTENSIONS = ['jsx', 'tsx', 'html', 'svg', 'md', 'mermaid'];
+const SUPPORTED_EXTENSIONS = ['stele', 'jsx', 'tsx', 'html', 'svg', 'md', 'mermaid'];
 
 export default function Library() {
   const navigate = useNavigate();
@@ -175,7 +175,7 @@ export default function Library() {
               {search ? 'No matching artifacts' : 'No artifacts yet'}
             </div>
             <div style={{ fontSize: '13px', color: '#475569' }}>
-              Drag and drop .jsx or .tsx files to import
+              Drag and drop .stele, .jsx, or .tsx files to import
             </div>
           </div>
           {!search && (

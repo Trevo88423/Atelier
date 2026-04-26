@@ -8,7 +8,8 @@ fn read_file(path: String) -> Result<String, String> {
 
 fn is_artifact_file(path: &str) -> bool {
     let lower = path.to_lowercase();
-    lower.ends_with(".jsx")
+    lower.ends_with(".stele")
+        || lower.ends_with(".jsx")
         || lower.ends_with(".tsx")
         || lower.ends_with(".html")
         || lower.ends_with(".svg")
