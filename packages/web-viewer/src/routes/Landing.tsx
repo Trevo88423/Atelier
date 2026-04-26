@@ -14,6 +14,7 @@ const RAW_BASE = 'https://raw.githubusercontent.com/stele-app/stele/main/example
 
 const DEMOS: Array<{ emoji: string; name: string; tagline: string; src: string }> = [
   { emoji: '⛵', name: 'Battleship',     tagline: 'Classic game, single file', src: `${RAW_BASE}/battleship.jsx` },
+  { emoji: '🎒', name: 'Year 2 Mission HQ', tagline: 'Six homework missions + printable PDF', src: `${RAW_BASE}/year2-homework.jsx` },
   { emoji: '🦺', name: 'Site Prestart',  tagline: 'Tradie daily check, GPS + photos', src: `${RAW_BASE}/site-prestart.tsx` },
   { emoji: '🔐', name: 'Paired crypto',  tagline: 'ECDH-derived shared key', src: `${RAW_BASE}/pair-crypto-test.tsx` },
   { emoji: '🛡️', name: 'RPC isolation', tagline: 'MessageChannel security check', src: `${RAW_BASE}/rpc-spoofing-test.tsx` },
