@@ -3,7 +3,7 @@
  * name: Year 2 Mission HQ
  * version: 1.0.0
  * author: Wombat HQ
- * description: A six-mission Year 2 mid-year homework artifact — Adding Asteroids, Coin Counter, Time Detective, Shape Sleuth, Reading Quest and Spelling Hero. Finish all six and hit "Tell My Teacher" to receive your printable Mission Report PDF.
+ * description: Six-mission Year 2 mid-year homework — Adding Asteroids, Coin Counter, Time Detective, Shape Sleuth, Reading Quest and Spelling Hero. Designed to be handed out by a teacher; on completion the results go straight to the teacher's homework endpoint (a Cloudflare Worker, a Google Sheet via Zapier, or any URL they own — they pick where). When no endpoint is wired up — like in this public demo — it falls back to a printable Mission Report PDF you can take to school.
  * archetype: self-contained
  */
 
@@ -957,10 +957,10 @@ function MissionMap({ progress, onPick, kidName }) {
 // ============================================================
 
 const STAGES = [
-  { icon: Phone, text: "Calling your teacher's classroom phone..." },
-  { icon: Phone, text: "Brrring brrring brrring..." },
-  { icon: Sparkles, text: "Hmm, the line is busy. They must be on lunch duty!" },
-  { icon: FileText, text: "No worries — generating your Mission Report PDF instead..." },
+  { icon: Phone, text: "Sending your results to your teacher's homework mailbox..." },
+  { icon: Phone, text: "Pinging the wombat-post network..." },
+  { icon: Sparkles, text: "No mailbox set up here yet — but that's OK!" },
+  { icon: FileText, text: "Making your Mission Report PDF to take to school instead..." },
 ];
 
 function Submitting({ teacherName, onPrint }) {
@@ -1245,8 +1245,11 @@ export default function HomeworkMissionHQ() {
             <h1 style={{ fontSize: 36, margin: "16px 0 4px", color: palette.ink, fontWeight: 900 }}>
               Year 2 Mission HQ
             </h1>
-            <div style={{ color: palette.muted, fontWeight: 700, marginBottom: 24, fontSize: 17 }}>
+            <div style={{ color: palette.muted, fontWeight: 700, marginBottom: 8, fontSize: 17 }}>
               Six missions. {TOTAL_QUESTIONS} questions. One brave wombat agent.
+            </div>
+            <div style={{ color: palette.muted, fontSize: 12, marginBottom: 22, lineHeight: 1.5, fontStyle: "italic" }}>
+              When you finish, your results go straight to your teacher — or, if there's no teacher mailbox set up, you get a printable PDF report.
             </div>
 
             <div style={{ textAlign: "left" }}>
