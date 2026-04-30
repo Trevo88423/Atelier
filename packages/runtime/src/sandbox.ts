@@ -255,9 +255,13 @@ export async function loadVendorScriptsForSource(source: string): Promise<string
  * Wildcard subdomains (`https://*.example.com`) are supported.
  */
 function buildCSP(grantedNetworkOrigins: string[]): string {
+  // data: and blob: are always allowed in connect-src — they're in-process
+  // schemes that don't carry network traffic, and artifacts routinely fetch
+  // their own canvas-derived data: URLs / Blob objects (e.g. for image bytes).
+  // Granted origins are appended on top of those.
   const connectSrc = grantedNetworkOrigins.length > 0
-    ? grantedNetworkOrigins.join(' ')
-    : "'none'";
+    ? `data: blob: ${grantedNetworkOrigins.join(' ')}`
+    : 'data: blob:';
 
   return [
     `default-src 'self' 'unsafe-inline'`,
