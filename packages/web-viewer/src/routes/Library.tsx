@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { libraryDelete, libraryList, type LibraryEntry } from '../idb';
+import { shareLink } from '../share';
 import type { Archetype } from '@stele/runtime';
 
 const ARCHETYPE_THEME: Record<Archetype, { label: string; background: string; color: string; border: string }> = {
@@ -65,15 +66,17 @@ export default function Library() {
     setEntries((prev) => prev.filter((x) => x.src !== src));
   };
 
-  const handleShare = async (e: React.MouseEvent, src: string) => {
+  const handleShare = async (e: React.MouseEvent, src: string, title: string) => {
     e.stopPropagation();
     const shareUrl = `${window.location.origin}/view?src=${encodeURIComponent(src)}`;
-    try {
-      await navigator.clipboard.writeText(shareUrl);
+    const outcome = await shareLink(shareUrl, title);
+    if (outcome === 'native') return;
+    if (outcome === 'copied') {
       setCopiedSrc(src);
       setTimeout(() => setCopiedSrc((curr) => (curr === src ? null : curr)), 1800);
-    } catch {
-      // Clipboard blocked — surface the URL so the user can copy by hand.
+    } else {
+      // Both Web Share and clipboard failed — surface the URL so the user
+      // can copy by hand.
       window.prompt('Copy this share link:', shareUrl);
     }
   };
@@ -176,8 +179,8 @@ export default function Library() {
                       {entry.title}
                     </div>
                     <button
-                      onClick={(e) => handleShare(e, entry.src)}
-                      title="Copy share link (no token included)"
+                      onClick={(e) => handleShare(e, entry.src, entry.title)}
+                      title="Share or copy link (no token included)"
                       style={{
                         padding: '2px 8px',
                         background: copiedSrc === entry.src ? '#0f2a1f' : 'transparent',

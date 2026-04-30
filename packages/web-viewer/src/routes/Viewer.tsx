@@ -26,6 +26,7 @@ import {
 import { attachBridge, type BridgeStatus } from '../bridge';
 import { getGranted, grantAll } from '../permissions';
 import { libraryUpsert, localArtifactGet, LOCAL_SCHEME } from '../idb';
+import { shareLink } from '../share';
 import PermissionDialog from '../components/PermissionDialog';
 
 type FetchErrReason = 'http' | 'network' | 'proxy';
@@ -157,9 +158,9 @@ export default function Viewer() {
     return () => { cancelled = true; };
   }, [src]);
 
-  // Parse manifest (JSX/TSX only).
+  // Parse manifest. Works for JSX/TSX (JSDoc block) and HTML (`<!-- @stele-manifest -->`).
   const { manifest, parseErr } = useMemo(() => {
-    if (fetchState.kind !== 'ok' || fetchState.kind_ === 'html') {
+    if (fetchState.kind !== 'ok') {
       return { manifest: null as Manifest | null, parseErr: null as string | null };
     }
     try {
@@ -421,11 +422,12 @@ function Header({ src, manifest, parseErr, status, viaProxy }: {
   // affordance can opt in to that behaviour.
 
   const handleShare = async () => {
-    try {
-      await navigator.clipboard.writeText(shareUrl);
+    const outcome = await shareLink(shareUrl, 'Stele artifact');
+    if (outcome === 'native') return;
+    if (outcome === 'copied') {
       setCopyState('copied');
       setTimeout(() => setCopyState('idle'), 1800);
-    } catch {
+    } else {
       setCopyState('failed');
       setTimeout(() => setCopyState('idle'), 2500);
     }

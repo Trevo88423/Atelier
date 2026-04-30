@@ -74,34 +74,56 @@ export const CAPABILITY_LABELS: Record<Capability['kind'], string> = {
 };
 
 /**
- * Extracts the @stele-manifest JSDoc block from source code.
- * Returns the raw body lines (with ` * ` prefix stripped), or null if no manifest found.
+ * Extracts the @stele-manifest comment block from source code.
+ *
+ * Recognises two forms:
+ *   - JSDoc:  /** ... @stele-manifest ... * /     (used by JSX/TSX)
+ *   - HTML:   <!-- ... @stele-manifest ... -->    (used by HTML/SVG)
+ *
+ * Returns the body lines with comment-prefix decoration stripped, or null
+ * if no manifest block is found.
  */
 function extractManifestBody(source: string): string[] | null {
-  // Find a JSDoc block containing @stele-manifest.
-  // JSDoc blocks look like: /** ... */
+  // JSDoc blocks first — most common.
   const jsdocRegex = /\/\*\*([\s\S]*?)\*\//g;
   let match;
   while ((match = jsdocRegex.exec(source)) !== null) {
-    const body = match[1];
-    if (!body.includes('@stele-manifest')) continue;
-
-    // Strip leading ` * ` from each line
-    const lines = body
-      .split('\n')
-      .map(line => line.replace(/^\s*\*\s?/, '').trimEnd());
-
-    // Drop empty leading/trailing lines
-    while (lines.length > 0 && lines[0].trim() === '') lines.shift();
-    while (lines.length > 0 && lines[lines.length - 1].trim() === '') lines.pop();
-
-    // Drop the @stele-manifest directive line itself
-    const directiveIdx = lines.findIndex(l => l.trim() === '@stele-manifest');
-    if (directiveIdx >= 0) lines.splice(directiveIdx, 1);
-
-    return lines;
+    if (!match[1].includes('@stele-manifest')) continue;
+    return normalizeManifestLines(match[1]);
   }
+
+  // HTML comments — for .html / .svg artifacts.
+  const htmlRegex = /<!--([\s\S]*?)-->/g;
+  while ((match = htmlRegex.exec(source)) !== null) {
+    if (!match[1].includes('@stele-manifest')) continue;
+    return normalizeManifestLines(match[1]);
+  }
+
   return null;
+}
+
+/**
+ * Strips comment-prefix decoration from each line of an extracted body.
+ *
+ * Handles:
+ *   - JSDoc-style ` * ` prefixes (asterisk optional after leading whitespace)
+ *   - HTML-style plain indentation
+ *
+ * Then trims empty leading/trailing lines and removes the `@stele-manifest`
+ * directive line itself so the parser sees just the field declarations.
+ */
+function normalizeManifestLines(body: string): string[] {
+  const lines = body
+    .split('\n')
+    .map(line => line.replace(/^\s*\*?\s?/, '').trimEnd());
+
+  while (lines.length > 0 && lines[0].trim() === '') lines.shift();
+  while (lines.length > 0 && lines[lines.length - 1].trim() === '') lines.pop();
+
+  const directiveIdx = lines.findIndex(l => l.trim() === '@stele-manifest');
+  if (directiveIdx >= 0) lines.splice(directiveIdx, 1);
+
+  return lines;
 }
 
 /**

@@ -8,6 +8,7 @@ import Settings from './routes/Settings';
 import Pair from './routes/Pair';
 import ShareTarget from './routes/ShareTarget';
 import DropToOpen from './components/DropToOpen';
+import FileHandler from './components/FileHandler';
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('#root not found');
@@ -16,6 +17,7 @@ createRoot(rootEl).render(
   <StrictMode>
     <BrowserRouter>
       <DropToOpen />
+      <FileHandler />
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/view" element={<Viewer />} />
